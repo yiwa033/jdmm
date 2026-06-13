@@ -8,11 +8,12 @@ import CalendarView from '@/components/diary/CalendarView'
 import Settings from '@/components/diary/Settings'
 import BottomNav from '@/components/diary/BottomNav'
 import PetCompanion from '@/components/diary/PetCompanion'
+import AICompanion from '@/components/diary/AICompanion'
 import type { MoodValue, WeatherValue } from '@/components/diary/Selectors'
 
-type Tab = 'feed' | 'calendar' | 'new' | 'pet' | 'settings'
+type Tab = 'feed' | 'calendar' | 'new' | 'pet' | 'chat' | 'settings'
 
-const DEFAULT_AUTO_LOCK_MS = 30 * 1000 // 30 seconds default (original value)
+const DEFAULT_AUTO_LOCK_MS = 30 * 1000 // 30 seconds default
 
 export default function Home() {
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null)
@@ -27,6 +28,7 @@ export default function Home() {
     weather: WeatherValue | ''
     temperature: string
   } | null>(null)
+  const [lastDiaryMood, setLastDiaryMood] = useState<string>('')
   const lastActivityRef = useRef<number>(Date.now())
 
   // Load auto-lock setting from localStorage
@@ -82,10 +84,11 @@ export default function Home() {
     lastActivityRef.current = Date.now()
   }, [])
 
-  const handleEntrySubmitted = useCallback(() => {
+  const handleEntrySubmitted = useCallback((mood?: string) => {
     setRefreshTrigger((prev) => prev + 1)
     setActiveTab('feed')
     setEditingEntry(null)
+    if (mood) setLastDiaryMood(mood)
   }, [])
 
   const handleDeleteEntry = useCallback((_id: string) => {
@@ -183,6 +186,9 @@ export default function Home() {
         )}
         {activeTab === 'pet' && (
           <PetCompanion />
+        )}
+        {activeTab === 'chat' && (
+          <AICompanion currentMood={lastDiaryMood} />
         )}
         {activeTab === 'settings' && (
           <Settings onLock={handleLock} cryptoKey={cryptoKey} autoLockMs={autoLockMs} onAutoLockChange={handleAutoLockChange} />
