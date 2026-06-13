@@ -12,14 +12,7 @@ import type { MoodValue, WeatherValue } from '@/components/diary/Selectors'
 
 type Tab = 'feed' | 'calendar' | 'new' | 'pet' | 'settings'
 
-const AUTO_LOCK_OPTIONS = [
-  { label: '1分钟', value: 60 },
-  { label: '3分钟', value: 180 },
-  { label: '5分钟', value: 300 },
-  { label: '10分钟', value: 600 },
-]
-
-const DEFAULT_AUTO_LOCK_MS = 60 * 1000 // 1 minute default
+const DEFAULT_AUTO_LOCK_MS = 30 * 1000 // 30 seconds default (original value)
 
 export default function Home() {
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null)

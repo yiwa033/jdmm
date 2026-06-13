@@ -29,12 +29,23 @@ interface SettingsProps {
   onAutoLockChange: (ms: number) => void
 }
 
-const AUTO_LOCK_OPTIONS = [
+const AUTO_LOCK_PRESETS = [
+  { label: '30秒', value: 30000 },
   { label: '1分钟', value: 60000 },
   { label: '3分钟', value: 180000 },
   { label: '5分钟', value: 300000 },
   { label: '10分钟', value: 600000 },
+  { label: '30分钟', value: 1800000 },
 ]
+
+function formatAutoLock(ms: number): string {
+  if (ms < 60000) return `${Math.round(ms / 1000)}秒`
+  if (ms < 3600000) {
+    const mins = ms / 60000
+    return Number.isInteger(mins) ? `${mins}分钟` : `${(ms / 60000).toFixed(1)}分钟`
+  }
+  return `${Math.round(ms / 3600000)}小时`
+}
 
 function parseUserAgent(ua: string): string {
   if (/iPhone/i.test(ua)) return 'iPhone'
@@ -70,6 +81,8 @@ export default function Settings({ onLock, cryptoKey, autoLockMs, onAutoLockChan
   const [hasDecoy, setHasDecoy] = useState(false)
   const [isDark, setIsDark] = useState(false)
   const [stats, setStats] = useState({ totalEntries: 0, totalChars: 0, streak: 0, totalWords: 0 })
+  const [showCustomLock, setShowCustomLock] = useState(false)
+  const [customLockMin, setCustomLockMin] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load data
@@ -334,19 +347,20 @@ export default function Settings({ onLock, cryptoKey, autoLockMs, onAutoLockChan
           <Timer className="w-5 h-5 text-[#E8A0BF]" />
           <h3 className="text-sm font-semibold text-[#3D2C2E] dark:text-[#F5E6D3]">自动锁定</h3>
           <span className="text-[10px] bg-[#FFF0F5] dark:bg-[#3A2028] text-[#E8A0BF] px-2 py-0.5 rounded-full">
-            {AUTO_LOCK_OPTIONS.find((o) => o.value === autoLockMs)?.label || '1分钟'}
+            {formatAutoLock(autoLockMs)}
           </span>
         </div>
         <p className="text-xs text-[#9B8A8E] dark:text-[#A89890] mb-3">
           无操作一段时间后自动锁定日记，保护你的隐私。
         </p>
-        <div className="flex gap-2">
-          {AUTO_LOCK_OPTIONS.map((option) => (
+        {/* Quick presets */}
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          {AUTO_LOCK_PRESETS.map((option) => (
             <button
               key={option.value}
-              onClick={() => onAutoLockChange(option.value)}
-              className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all active:scale-95 ${
-                autoLockMs === option.value
+              onClick={() => { onAutoLockChange(option.value); setShowCustomLock(false) }}
+              className={`py-2.5 rounded-xl text-xs font-medium transition-all active:scale-95 ${
+                autoLockMs === option.value && !showCustomLock
                   ? 'bg-gradient-to-r from-[#E8A0BF] to-[#F2C57C] text-white shadow-sm'
                   : 'bg-white/60 dark:bg-[#1A1614]/40 text-[#9B8A8E] border border-[#E8D5DE]/30 dark:border-[#4A3540]/30'
               }`}
@@ -355,6 +369,59 @@ export default function Settings({ onLock, cryptoKey, autoLockMs, onAutoLockChan
             </button>
           ))}
         </div>
+        {/* Custom time */}
+        {!showCustomLock ? (
+          <button
+            onClick={() => setShowCustomLock(true)}
+            className={`w-full py-2.5 rounded-xl text-xs font-medium transition-all active:scale-95 ${
+              !AUTO_LOCK_PRESETS.some((o) => o.value === autoLockMs)
+                ? 'bg-gradient-to-r from-[#E8A0BF] to-[#F2C57C] text-white shadow-sm'
+                : 'bg-white/60 dark:bg-[#1A1614]/40 text-[#9B8A8E] border border-[#E8D5DE]/30 dark:border-[#4A3540]/30'
+            }`}
+          >
+            {!AUTO_LOCK_PRESETS.some((o) => o.value === autoLockMs) ? `自定义 · ${formatAutoLock(autoLockMs)}` : '⏱ 自定义时间'}
+          </button>
+        ) : (
+          <div className="flex items-center gap-2 animate-scale-in">
+            <div className="flex-1 relative">
+              <Input
+                type="number"
+                inputMode="numeric"
+                min="10"
+                max="120"
+                value={customLockMin}
+                onChange={(e) => setCustomLockMin(e.target.value)}
+                placeholder="输入分钟数"
+                className="bg-white/60 dark:bg-[#1A1614]/60 border-[#E8D5DE]/40 dark:border-[#4A3540]/40 rounded-xl h-10 text-sm pr-10"
+                autoFocus
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#9B8A8E]">分钟</span>
+            </div>
+            <Button
+              onClick={() => {
+                const mins = parseInt(customLockMin, 10)
+                if (mins >= 1 && mins <= 120) {
+                  onAutoLockChange(mins * 60000)
+                  setShowCustomLock(false)
+                  setCustomLockMin('')
+                }
+              }}
+              className="bg-gradient-to-r from-[#E8A0BF] to-[#F2C57C] text-white rounded-xl h-10 px-4 text-sm"
+            >
+              确定
+            </Button>
+            <Button
+              onClick={() => { setShowCustomLock(false); setCustomLockMin('') }}
+              variant="ghost"
+              className="rounded-xl h-10 px-3 text-sm text-[#9B8A8E]"
+            >
+              取消
+            </Button>
+          </div>
+        )}
+        {showCustomLock && customLockMin && (parseInt(customLockMin, 10) < 1 || parseInt(customLockMin, 10) > 120) && (
+          <p className="text-[10px] text-red-400 mt-1.5">请输入1~120之间的分钟数</p>
+        )}
       </div>
 
       {/* Data Export / Import */}
@@ -455,7 +522,7 @@ export default function Settings({ onLock, cryptoKey, autoLockMs, onAutoLockChan
         </div>
         <div className="text-left">
           <p className="text-sm font-medium text-[#3D2C2E] dark:text-[#F5E6D3]">锁定应用</p>
-          <p className="text-xs text-[#9B8A8E]">立即锁定 · {AUTO_LOCK_OPTIONS.find((o) => o.value === autoLockMs)?.label || '1分钟'}无操作自动锁定</p>
+          <p className="text-xs text-[#9B8A8E]">立即锁定 · {formatAutoLock(autoLockMs)}无操作自动锁定</p>
         </div>
       </button>
 
