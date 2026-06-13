@@ -12,13 +12,21 @@ import type { MoodValue, WeatherValue } from '@/components/diary/Selectors'
 
 type Tab = 'feed' | 'calendar' | 'new' | 'pet' | 'settings'
 
-const AUTO_LOCK_MS = 30 * 1000 // 30 seconds auto-lock
+const AUTO_LOCK_OPTIONS = [
+  { label: '1分钟', value: 60 },
+  { label: '3分钟', value: 180 },
+  { label: '5分钟', value: 300 },
+  { label: '10分钟', value: 600 },
+]
+
+const DEFAULT_AUTO_LOCK_MS = 60 * 1000 // 1 minute default
 
 export default function Home() {
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null)
   const [isDecoy, setIsDecoy] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('feed')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [autoLockMs, setAutoLockMs] = useState(DEFAULT_AUTO_LOCK_MS)
   const [editingEntry, setEditingEntry] = useState<{
     id: string
     text: string
@@ -27,6 +35,17 @@ export default function Home() {
     temperature: string
   } | null>(null)
   const lastActivityRef = useRef<number>(Date.now())
+
+  // Load auto-lock setting from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('diary-auto-lock')
+    if (saved) {
+      const parsed = parseInt(saved, 10)
+      if (!isNaN(parsed) && parsed >= 60000) {
+        setAutoLockMs(parsed)
+      }
+    }
+  }, [])
 
   const handleLock = useCallback(() => {
     setCryptoKey(null)
@@ -39,12 +58,12 @@ export default function Home() {
   useEffect(() => {
     if (!cryptoKey) return
     const timer = setInterval(() => {
-      if (Date.now() - lastActivityRef.current > AUTO_LOCK_MS) {
+      if (Date.now() - lastActivityRef.current > autoLockMs) {
         handleLock()
       }
     }, 5000)
     return () => clearInterval(timer)
-  }, [cryptoKey, handleLock])
+  }, [cryptoKey, handleLock, autoLockMs])
 
   // Track activity: reset timer on any interaction
   useEffect(() => {
@@ -93,6 +112,11 @@ export default function Home() {
 
   const handlePinEntry = useCallback((_id: string, _pinned: boolean) => {
     setRefreshTrigger((prev) => prev + 1)
+  }, [])
+
+  const handleAutoLockChange = useCallback((ms: number) => {
+    setAutoLockMs(ms)
+    localStorage.setItem('diary-auto-lock', String(ms))
   }, [])
 
   // Show lock screen if not unlocked
@@ -168,7 +192,7 @@ export default function Home() {
           <PetCompanion />
         )}
         {activeTab === 'settings' && (
-          <Settings onLock={handleLock} cryptoKey={cryptoKey} />
+          <Settings onLock={handleLock} cryptoKey={cryptoKey} autoLockMs={autoLockMs} onAutoLockChange={handleAutoLockChange} />
         )}
       </div>
 

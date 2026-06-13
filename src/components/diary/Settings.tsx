@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Lock, ShieldCheck, Info, Eye, Smartphone, Clock, AlertTriangle, Camera, EyeOff, Download, Upload, Moon, Sun, BarChart3, BookOpen, Flame, FileText } from 'lucide-react'
+import { Lock, ShieldCheck, Info, Eye, Smartphone, Clock, AlertTriangle, Camera, EyeOff, Download, Upload, Moon, Sun, BarChart3, BookOpen, Flame, FileText, Timer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { decrypt } from '@/lib/crypto'
@@ -25,7 +25,16 @@ interface IntruderPhotoEntry {
 interface SettingsProps {
   onLock: () => void
   cryptoKey: CryptoKey
+  autoLockMs: number
+  onAutoLockChange: (ms: number) => void
 }
+
+const AUTO_LOCK_OPTIONS = [
+  { label: '1分钟', value: 60000 },
+  { label: '3分钟', value: 180000 },
+  { label: '5分钟', value: 300000 },
+  { label: '10分钟', value: 600000 },
+]
 
 function parseUserAgent(ua: string): string {
   if (/iPhone/i.test(ua)) return 'iPhone'
@@ -45,7 +54,7 @@ function parseBrowser(ua: string): string {
   return '浏览器'
 }
 
-export default function Settings({ onLock, cryptoKey }: SettingsProps) {
+export default function Settings({ onLock, cryptoKey, autoLockMs, onAutoLockChange }: SettingsProps) {
   const [changingPin, setChangingPin] = useState(false)
   const [oldPin, setOldPin] = useState('')
   const [newPin, setNewPin] = useState('')
@@ -319,6 +328,35 @@ export default function Settings({ onLock, cryptoKey }: SettingsProps) {
         </div>
       </button>
 
+      {/* Auto Lock Time */}
+      <div className="p-4 bg-white/70 dark:bg-[#2A1F1E]/70 rounded-2xl border border-[#E8D5DE]/40 dark:border-[#4A3540]/40">
+        <div className="flex items-center gap-2 mb-3">
+          <Timer className="w-5 h-5 text-[#E8A0BF]" />
+          <h3 className="text-sm font-semibold text-[#3D2C2E] dark:text-[#F5E6D3]">自动锁定</h3>
+          <span className="text-[10px] bg-[#FFF0F5] dark:bg-[#3A2028] text-[#E8A0BF] px-2 py-0.5 rounded-full">
+            {AUTO_LOCK_OPTIONS.find((o) => o.value === autoLockMs)?.label || '1分钟'}
+          </span>
+        </div>
+        <p className="text-xs text-[#9B8A8E] dark:text-[#A89890] mb-3">
+          无操作一段时间后自动锁定日记，保护你的隐私。
+        </p>
+        <div className="flex gap-2">
+          {AUTO_LOCK_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => onAutoLockChange(option.value)}
+              className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all active:scale-95 ${
+                autoLockMs === option.value
+                  ? 'bg-gradient-to-r from-[#E8A0BF] to-[#F2C57C] text-white shadow-sm'
+                  : 'bg-white/60 dark:bg-[#1A1614]/40 text-[#9B8A8E] border border-[#E8D5DE]/30 dark:border-[#4A3540]/30'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Data Export / Import */}
       <div className="p-4 bg-white/70 dark:bg-[#2A1F1E]/70 rounded-2xl border border-[#E8D5DE]/40 dark:border-[#4A3540]/40">
         <div className="flex items-center gap-2 mb-3">
@@ -417,7 +455,7 @@ export default function Settings({ onLock, cryptoKey }: SettingsProps) {
         </div>
         <div className="text-left">
           <p className="text-sm font-medium text-[#3D2C2E] dark:text-[#F5E6D3]">锁定应用</p>
-          <p className="text-xs text-[#9B8A8E]">立即锁定 · 30秒无操作自动锁定</p>
+          <p className="text-xs text-[#9B8A8E]">立即锁定 · {AUTO_LOCK_OPTIONS.find((o) => o.value === autoLockMs)?.label || '1分钟'}无操作自动锁定</p>
         </div>
       </button>
 
@@ -498,9 +536,10 @@ export default function Settings({ onLock, cryptoKey }: SettingsProps) {
           <li>• 加密密钥从不离开你的设备</li>
           <li>• 伪装模式：假密码看到空日记</li>
           <li>• 入侵拍照：输错3次自动拍下偷窥者</li>
-          <li>• 自动锁定：30秒无操作自动锁屏</li>
+          <li>• 自动锁定：无操作自动锁屏</li>
           <li>• 数据备份：加密导出，安全无忧</li>
           <li>• 标签分类：轻松管理你的日记</li>
+          <li>• 删除确认：防止误删日记</li>
         </ul>
       </div>
 
@@ -511,7 +550,7 @@ export default function Settings({ onLock, cryptoKey }: SettingsProps) {
           <h3 className="text-sm font-semibold text-[#3D2C2E] dark:text-[#F5E6D3]">关于心语日记</h3>
         </div>
         <p className="text-xs text-[#9B8A8E] dark:text-[#A89890]">
-          心语日记 v2.0 — 你的私密空间，只属于你的日记。记录每一天的心情，守护每一份感受。
+          心语日记 v2.1 — 你的私密空间，只属于你的日记。记录每一天的心情，守护每一份感受。
         </p>
       </div>
     </div>

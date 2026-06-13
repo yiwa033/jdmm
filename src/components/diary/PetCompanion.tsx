@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Heart, Utensils, Sparkles, Palette, Baby, Cat, Dog, Rabbit, Squirrel } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import PetAchievements from './PetAchievements'
 
 interface PetData {
   id: string
@@ -400,6 +401,9 @@ export default function PetCompanion() {
         </Button>
       </div>
 
+      {/* Achievements */}
+      <PetAchievements pet={pet} />
+
       {/* Pet Type Selector */}
       <div className="bg-white/70 dark:bg-[#2A1F1E]/70 rounded-2xl p-4 border border-[#E8D5DE]/40 dark:border-[#4A3540]/40">
         <div className="flex items-center justify-between mb-3">
@@ -487,6 +491,7 @@ export default function PetCompanion() {
           <li>• 每100经验值升一级，写日记升级最快</li>
           <li>• 精力不足时玩耍会失败，让宠物休息一会吧</li>
           <li>• 点击宠物名字可以给它改名字哦</li>
+          <li>• 完成特定目标可解锁成就徽章 🏆</li>
         </ul>
       </div>
     </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, TrendingUp, Calendar } from 'lucide-react'
+import { ChevronLeft, ChevronRight, TrendingUp, Calendar, X } from 'lucide-react'
 import { decrypt } from '@/lib/crypto'
 import type { MoodValue, WeatherValue } from './Selectors'
 import { MOODS, WEATHERS } from './Selectors'
@@ -13,6 +13,10 @@ interface DecodedEntry {
   weather: WeatherValue | ''
   temperature: string
   createdAt: string
+  recordedAt: string
+  tags: string[]
+  hasImage: boolean
+  imageUrl: string
 }
 
 interface CalendarViewProps {
@@ -44,6 +48,7 @@ export default function CalendarView({ cryptoKey }: CalendarViewProps) {
   const [loading, setLoading] = useState(false)
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([])
   const [period, setPeriod] = useState<7 | 14 | 30>(14)
+  const [detailEntry, setDetailEntry] = useState<DecodedEntry | null>(null)
 
   // Load entry dates & mood data on mount
   useEffect(() => {
@@ -95,6 +100,14 @@ export default function CalendarView({ cryptoKey }: CalendarViewProps) {
         try {
           const contentJson = await decrypt(entry.encryptedContent, cryptoKey)
           const content = JSON.parse(contentJson)
+          let imageUrl = ''
+          if (entry.encryptedImage) {
+            try {
+              imageUrl = await decrypt(entry.encryptedImage, cryptoKey)
+            } catch {
+              // skip
+            }
+          }
           decoded.push({
             id: entry.id,
             text: content.text || '',
@@ -102,6 +115,10 @@ export default function CalendarView({ cryptoKey }: CalendarViewProps) {
             weather: content.weather || '',
             temperature: content.temperature || '',
             createdAt: entry.createdAt,
+            recordedAt: content.recordedAt || entry.createdAt,
+            tags: content.tags || [],
+            hasImage: !!entry.encryptedImage,
+            imageUrl,
           })
         } catch {
           // skip
@@ -215,35 +232,122 @@ export default function CalendarView({ cryptoKey }: CalendarViewProps) {
             dayEntries.map((entry) => {
               const mood = MOODS.find((m) => m.value === entry.mood)
               const weather = WEATHERS.find((w) => w.value === entry.weather)
+              const dateObj = new Date(entry.recordedAt || entry.createdAt)
+              const timeStr = dateObj.toLocaleTimeString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+              })
               return (
                 <div
                   key={entry.id}
-                  className="bg-white/70 dark:bg-[#2A1F1E]/70 rounded-2xl p-4 border border-[#E8D5DE]/40 dark:border-[#4A3540]/40"
+                  onClick={() => setDetailEntry(entry)}
+                  className="bg-white/70 dark:bg-[#2A1F1E]/70 rounded-2xl p-4 border border-[#E8D5DE]/40 dark:border-[#4A3540]/40 cursor-pointer hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-center gap-2 mb-2">
-                    {mood && <span>{mood.emoji}</span>}
+                    {mood && <span className="text-lg">{mood.emoji}</span>}
+                    {mood && <span className="text-xs text-[#9B8A8E]">{mood.label}</span>}
                     {weather && <span className="text-xs text-[#9B8A8E]">{weather.label}</span>}
                     {entry.temperature && (
                       <span className="text-xs text-[#9B8A8E]">{entry.temperature}°C</span>
                     )}
-                    <span className="text-xs text-[#B8A8AC] ml-auto">
-                      {new Date(entry.createdAt).toLocaleDateString('zh-CN', {
-                        month: 'short',
-                        day: 'numeric',
-                      })} {new Date(entry.createdAt).toLocaleTimeString('zh-CN', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                      })}
+                    <span className="text-xs text-[#B8A8AC] ml-auto font-mono tabular-nums">
+                      {timeStr}
                     </span>
                   </div>
-                  <p className="text-[#3D2C2E] dark:text-[#F5E6D3] text-sm leading-relaxed whitespace-pre-wrap">
+                  <p className="text-[#3D2C2E] dark:text-[#F5E6D3] text-sm leading-relaxed whitespace-pre-wrap line-clamp-3">
                     {entry.text}
                   </p>
+                  {entry.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {entry.tags.slice(0, 3).map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-1.5 py-0.5 bg-[#FFF0F5]/60 dark:bg-[#3A2028]/60 text-[#E8A0BF] text-[10px] rounded-lg"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {entry.hasImage && entry.imageUrl && (
+                    <div className="mt-2 rounded-xl overflow-hidden">
+                      <img src={entry.imageUrl} alt="" className="w-full max-h-32 object-cover rounded-xl" />
+                    </div>
+                  )}
+                  <p className="text-[10px] text-[#C8B8BC] mt-2">点击查看详情</p>
                 </div>
               )
             })
           )}
+        </div>
+      )}
+
+      {/* Detail Popup */}
+      {detailEntry && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end justify-center" onClick={() => setDetailEntry(null)}>
+          <div
+            className="bg-white dark:bg-[#2A1F1E] rounded-t-3xl p-5 w-full max-w-lg max-h-[80vh] overflow-y-auto border-t border-[#E8D5DE]/40 dark:border-[#4A3540]/40 animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-[#3D2C2E] dark:text-[#F5E6D3]">日记详情</h3>
+              <button
+                onClick={() => setDetailEntry(null)}
+                className="w-8 h-8 rounded-full bg-[#F5E6D3]/50 dark:bg-[#3A2A20]/50 flex items-center justify-center"
+              >
+                <X className="w-4 h-4 text-[#9B8A8E]" />
+              </button>
+            </div>
+
+            {(() => {
+              const mood = MOODS.find((m) => m.value === detailEntry.mood)
+              const weather = WEATHERS.find((w) => w.value === detailEntry.weather)
+              const dateObj = new Date(detailEntry.recordedAt || detailEntry.createdAt)
+              const dateStr = dateObj.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })
+              const timeStr = dateObj.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+
+              return (
+                <>
+                  <div className="flex items-center gap-2 mb-3">
+                    {mood && <span className="text-2xl">{mood.emoji}</span>}
+                    {mood && <span className="text-sm text-[#9B8A8E]">{mood.label}</span>}
+                    {weather && <span className="text-xs text-[#9B8A8E] ml-2">{weather.label}</span>}
+                    {detailEntry.temperature && <span className="text-xs text-[#9B8A8E]">{detailEntry.temperature}°C</span>}
+                  </div>
+
+                  <p className="text-[#3D2C2E] dark:text-[#F5E6D3] text-[15px] leading-relaxed whitespace-pre-wrap mb-4">
+                    {detailEntry.text}
+                  </p>
+
+                  {detailEntry.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                      {detailEntry.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-2 py-0.5 bg-[#FFF0F5]/60 dark:bg-[#3A2028]/60 text-[#E8A0BF] text-[11px] rounded-lg border border-[#E8D5DE]/30 dark:border-[#4A3540]/30"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {detailEntry.hasImage && detailEntry.imageUrl && (
+                    <div className="mb-4 rounded-xl overflow-hidden">
+                      <img src={detailEntry.imageUrl} alt="日记图片" className="w-full object-cover rounded-xl" />
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-3 text-xs text-[#B8A8AC] dark:text-[#6A5A5E]">
+                    <span>📅 {dateStr}</span>
+                    <span className="font-mono tabular-nums">🕐 {timeStr}</span>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
         </div>
       )}
 

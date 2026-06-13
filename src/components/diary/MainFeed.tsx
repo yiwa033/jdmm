@@ -3,6 +3,10 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search, X, Pin } from 'lucide-react'
 import DiaryCard from './DiaryCard'
+import DailyGreeting from './DailyGreeting'
+import FeedSkeleton from './FeedSkeleton'
+import DeleteConfirmDialog from './DeleteConfirmDialog'
+import ImageViewer from './ImageViewer'
 import { decrypt } from '@/lib/crypto'
 import type { MoodValue, WeatherValue } from './Selectors'
 
@@ -41,6 +45,8 @@ export default function MainFeed({ cryptoKey, onNewEntry, onDeleteEntry, onEditE
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [showSearch, setShowSearch] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [viewImage, setViewImage] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -156,16 +162,21 @@ export default function MainFeed({ cryptoKey, onNewEntry, onDeleteEntry, onEditE
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-[#E8A0BF] animate-pulse">加载中...</div>
+      <div className="flex-1 overflow-y-auto pb-24">
+        <FeedSkeleton />
       </div>
     )
   }
 
   return (
     <div className="flex-1 overflow-y-auto pb-24">
+      {/* Daily Greeting */}
+      <div className="px-4 pt-3">
+        <DailyGreeting />
+      </div>
+
       {/* Search Bar */}
-      <div className="px-4 pt-3 pb-1">
+      <div className="px-4 pt-2 pb-1">
         {showSearch ? (
           <div className="flex items-center gap-2 bg-white/70 dark:bg-[#2A1F1E]/70 rounded-xl border border-[#E8D5DE]/40 dark:border-[#4A3540]/40 px-3 py-2">
             <Search className="w-4 h-4 text-[#B8A8AC] flex-shrink-0" />
@@ -198,7 +209,7 @@ export default function MainFeed({ cryptoKey, onNewEntry, onDeleteEntry, onEditE
       </div>
 
       {filtered.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center min-h-[60vh] gap-4 px-6">
+        <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh] gap-4 px-6">
           <div className="w-24 h-24 rounded-full bg-[#FFF0F5] dark:bg-[#3A2028] flex items-center justify-center">
             <span className="text-4xl">{searchQuery ? '🔍' : '🌙'}</span>
           </div>
@@ -232,9 +243,10 @@ export default function MainFeed({ cryptoKey, onNewEntry, onDeleteEntry, onEditE
                   <DiaryCard
                     key={entry.id}
                     entry={entry}
-                    onDelete={handleDelete}
+                    onDelete={(id) => setDeleteTarget(id)}
                     onEdit={onEditEntry}
                     onPin={handlePin}
+                    onImageClick={(url) => setViewImage(url)}
                   />
                 ))}
               </div>
@@ -254,9 +266,10 @@ export default function MainFeed({ cryptoKey, onNewEntry, onDeleteEntry, onEditE
                   <DiaryCard
                     key={entry.id}
                     entry={entry}
-                    onDelete={handleDelete}
+                    onDelete={(id) => setDeleteTarget(id)}
                     onEdit={onEditEntry}
                     onPin={handlePin}
+                    onImageClick={(url) => setViewImage(url)}
                   />
                 ))}
               </div>
@@ -264,6 +277,25 @@ export default function MainFeed({ cryptoKey, onNewEntry, onDeleteEntry, onEditE
           ))}
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onConfirm={() => {
+          if (deleteTarget) {
+            handleDelete(deleteTarget)
+            setDeleteTarget(null)
+          }
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
+      {/* Image Viewer */}
+      <ImageViewer
+        open={!!viewImage}
+        imageUrl={viewImage || ''}
+        onClose={() => setViewImage(null)}
+      />
     </div>
   )
 }
