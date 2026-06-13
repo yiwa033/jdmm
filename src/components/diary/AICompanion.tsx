@@ -3,8 +3,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Send, Trash2, Wind, BookOpen, X } from 'lucide-react'
+import { Send, Trash2, Wind, BookOpen, X, ShieldAlert } from 'lucide-react'
 import { getPixelPet } from './PixelPet'
+import { hasSensitiveContent } from '@/lib/contentFilter'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -65,6 +66,7 @@ export default function AICompanion({ currentMood, diaryContext }: AICompanionPr
   const [breathPhase, setBreathPhase] = useState<'inhale' | 'hold' | 'exhale' | 'done'>('inhale')
   const [breathCount, setBreathCount] = useState(0)
   const [showMoodPrompt, setShowMoodPrompt] = useState(false)
+  const [contentWarning, setContentWarning] = useState('')
   const chatEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -155,6 +157,14 @@ export default function AICompanion({ currentMood, diaryContext }: AICompanionPr
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isLoading) return
 
+    // === 前端敏感内容检测 ===
+    if (hasSensitiveContent(text.trim())) {
+      setContentWarning('检测到敏感内容，请修改后重新发送。我们聊聊其他话题吧~🛡️')
+      setTimeout(() => setContentWarning(''), 4000)
+      return
+    }
+
+    setContentWarning('')
     const userMsg: ChatMessage = {
       role: 'user',
       content: text.trim(),
@@ -452,6 +462,17 @@ export default function AICompanion({ currentMood, diaryContext }: AICompanionPr
 
         <div ref={chatEndRef} />
       </div>
+
+      {/* Content safety warning */}
+      {contentWarning && (
+        <div className="mx-2 mb-1 flex items-center gap-2 px-3 py-2 bg-[#FFF3E0] dark:bg-[#3A2A1A] rounded-xl border border-[#FFB74D]/40 dark:border-[#6A4A2A]/40 animate-scale-in">
+          <ShieldAlert className="w-4 h-4 text-[#FF9800] flex-shrink-0" />
+          <span className="text-xs text-[#E65100] dark:text-[#FFB74D]">{contentWarning}</span>
+          <button onClick={() => setContentWarning('')} className="ml-auto text-[#FF9800] hover:text-[#E65100]">
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
 
       {/* Input area */}
       <div className="px-2 pt-2 pb-2">
