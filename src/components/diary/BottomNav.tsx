@@ -1,8 +1,8 @@
 'use client'
 
-import { Home, CalendarPlus, PlusCircle, Settings, TrendingUp, Sparkles } from 'lucide-react'
+import { Home, CalendarPlus, PlusCircle, Settings, TrendingUp, Sparkles, Cat } from 'lucide-react'
 
-type Tab = 'feed' | 'calendar' | 'new' | 'trend' | 'settings'
+type Tab = 'feed' | 'calendar' | 'new' | 'trend' | 'pet' | 'settings'
 
 interface BottomNavProps {
   active: Tab
@@ -15,7 +15,7 @@ export default function BottomNav({ active, onChange }: BottomNavProps) {
       <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
         <button
           onClick={() => onChange('feed')}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 transition-colors ${
+          className={`flex flex-col items-center gap-0.5 px-2 py-1 transition-colors ${
             active === 'feed' ? 'text-[#E8A0BF]' : 'text-[#B8A8AC] dark:text-[#6A5A5E]'
           }`}
         >
@@ -25,7 +25,7 @@ export default function BottomNav({ active, onChange }: BottomNavProps) {
 
         <button
           onClick={() => onChange('trend')}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 transition-colors ${
+          className={`flex flex-col items-center gap-0.5 px-2 py-1 transition-colors ${
             active === 'trend' ? 'text-[#E8A0BF]' : 'text-[#B8A8AC] dark:text-[#6A5A5E]'
           }`}
         >
@@ -48,18 +48,18 @@ export default function BottomNav({ active, onChange }: BottomNavProps) {
         </button>
 
         <button
-          onClick={() => onChange('calendar')}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 transition-colors ${
-            active === 'calendar' ? 'text-[#E8A0BF]' : 'text-[#B8A8AC] dark:text-[#6A5A5E]'
+          onClick={() => onChange('pet')}
+          className={`flex flex-col items-center gap-0.5 px-2 py-1 transition-colors ${
+            active === 'pet' ? 'text-[#E8A0BF]' : 'text-[#B8A8AC] dark:text-[#6A5A5E]'
           }`}
         >
-          <CalendarPlus className="w-5 h-5" />
-          <span className="text-[10px]">日历</span>
+          <Cat className="w-5 h-5" />
+          <span className="text-[10px]">宠物</span>
         </button>
 
         <button
           onClick={() => onChange('settings')}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 transition-colors ${
+          className={`flex flex-col items-center gap-0.5 px-2 py-1 transition-colors ${
             active === 'settings' ? 'text-[#E8A0BF]' : 'text-[#B8A8AC] dark:text-[#6A5A5E]'
           }`}
         >

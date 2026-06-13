@@ -42,3 +42,19 @@ model IntruderPhoto {
   userAgent String   // Device info
   createdAt DateTime @default(now())
 }
+
+model PetState {
+  id           String   @id @default(cuid())
+  petType      String   @default("cat")  // cat, dog, rabbit, hamster
+  name         String   @default("小语")
+  level        Int      @default(1)
+  exp          Int      @default(0)
+  happiness    Int      @default(80)      // 0-100
+  fullness     Int      @default(80)      // 0-100
+  energy       Int      @default(80)      // 0-100
+  lastFedAt    DateTime @default(now())
+  lastPetAt    DateTime @default(now())
+  diaryCount   Int      @default(0)       // total diaries written while owning pet
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

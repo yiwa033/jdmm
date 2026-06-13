@@ -166,6 +166,12 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
           body: JSON.stringify({ encryptedContent, encryptedImage }),
         })
         if (res.ok) {
+          // Pet gains exp when editing diary
+          fetch('/api/pet', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'diary' }),
+          }).catch(() => {})
           onSubmitted()
         }
       } else {
@@ -181,6 +187,12 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
           }),
         })
         if (res.ok) {
+          // Pet gains exp when writing diary
+          fetch('/api/pet', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'diary' }),
+          }).catch(() => {})
           onSubmitted()
         }
       }
