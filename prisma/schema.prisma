@@ -9,7 +9,7 @@ datasource db {
 
 model DiaryEntry {
   id               String   @id @default(cuid())
-  encryptedContent String   // AES-GCM encrypted JSON blob: {text, mood, weather, temperature}
+  encryptedContent String   // AES-GCM encrypted JSON: {text, mood, weather, temperature, recordedAt}
   encryptedImage   String?  // AES-GCM encrypted base64 image data
   entryDate        String   // YYYY-MM-DD format for calendar lookup (not encrypted)
   createdAt        DateTime @default(now())
@@ -17,12 +17,14 @@ model DiaryEntry {
 }
 
 model AppPassword {
-  id           String   @id @default(cuid())
-  passwordHash String   // SHA-256 hash of password (for verification)
-  keySalt      String   // PBKDF2 salt for AES key derivation (stored in hex)
-  openCount    Int      @default(0) // Total app open count
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String   @id @default(cuid())
+  passwordHash     String   // SHA-256 hash of real password
+  keySalt          String   // PBKDF2 salt for real key derivation (hex)
+  decoyPasswordHash String? // SHA-256 hash of decoy (fake) password
+  decoyKeySalt     String?  // PBKDF2 salt for decoy key derivation (hex)
+  openCount        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model LoginLog {
@@ -30,5 +32,13 @@ model LoginLog {
   ip        String   // IP address
   userAgent String   // Browser/device info
   success   Boolean  // Login success or failed attempt
+  createdAt DateTime @default(now())
+}
+
+model IntruderPhoto {
+  id        String   @id @default(cuid())
+  photoData String   // Base64 encoded photo from front camera
+  ip        String   // IP at time of capture
+  userAgent String   // Device info
   createdAt DateTime @default(now())
 }

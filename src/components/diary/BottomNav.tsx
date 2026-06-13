@@ -1,8 +1,8 @@
 'use client'
 
-import { Home, CalendarPlus, PlusCircle, Settings, Sparkles } from 'lucide-react'
+import { Home, CalendarPlus, PlusCircle, Settings, TrendingUp, Sparkles } from 'lucide-react'
 
-type Tab = 'feed' | 'calendar' | 'new' | 'settings'
+type Tab = 'feed' | 'calendar' | 'new' | 'trend' | 'settings'
 
 interface BottomNavProps {
   active: Tab
@@ -15,10 +15,8 @@ export default function BottomNav({ active, onChange }: BottomNavProps) {
       <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
         <button
           onClick={() => onChange('feed')}
-          className={`flex flex-col items-center gap-0.5 px-4 py-1 transition-colors ${
-            active === 'feed'
-              ? 'text-[#E8A0BF]'
-              : 'text-[#B8A8AC] dark:text-[#6A5A5E]'
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 transition-colors ${
+            active === 'feed' ? 'text-[#E8A0BF]' : 'text-[#B8A8AC] dark:text-[#6A5A5E]'
           }`}
         >
           <Home className="w-5 h-5" />
@@ -26,15 +24,13 @@ export default function BottomNav({ active, onChange }: BottomNavProps) {
         </button>
 
         <button
-          onClick={() => onChange('calendar')}
-          className={`flex flex-col items-center gap-0.5 px-4 py-1 transition-colors ${
-            active === 'calendar'
-              ? 'text-[#E8A0BF]'
-              : 'text-[#B8A8AC] dark:text-[#6A5A5E]'
+          onClick={() => onChange('trend')}
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 transition-colors ${
+            active === 'trend' ? 'text-[#E8A0BF]' : 'text-[#B8A8AC] dark:text-[#6A5A5E]'
           }`}
         >
-          <CalendarPlus className="w-5 h-5" />
-          <span className="text-[10px]">日历</span>
+          <TrendingUp className="w-5 h-5" />
+          <span className="text-[10px]">趋势</span>
         </button>
 
         {/* Center New Button */}
@@ -42,11 +38,7 @@ export default function BottomNav({ active, onChange }: BottomNavProps) {
           onClick={() => onChange('new')}
           className="flex items-center justify-center -mt-4"
         >
-          <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${
-            active === 'new'
-              ? 'bg-gradient-to-br from-[#E8A0BF] to-[#F2C57C] shadow-[#E8A0BF]/30'
-              : 'bg-gradient-to-br from-[#E8A0BF] to-[#F2C57C] shadow-[#E8A0BF]/20'
-          }`}>
+          <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 bg-gradient-to-br from-[#E8A0BF] to-[#F2C57C] ${active === 'new' ? 'shadow-[#E8A0BF]/30' : 'shadow-[#E8A0BF]/20'}`}>
             {active === 'new' ? (
               <Sparkles className="w-6 h-6 text-white" />
             ) : (
@@ -56,15 +48,23 @@ export default function BottomNav({ active, onChange }: BottomNavProps) {
         </button>
 
         <button
+          onClick={() => onChange('calendar')}
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 transition-colors ${
+            active === 'calendar' ? 'text-[#E8A0BF]' : 'text-[#B8A8AC] dark:text-[#6A5A5E]'
+          }`}
+        >
+          <CalendarPlus className="w-5 h-5" />
+          <span className="text-[10px]">日历</span>
+        </button>
+
+        <button
           onClick={() => onChange('settings')}
-          className={`flex flex-col items-center gap-0.5 px-4 py-1 transition-colors ${
-            active === 'settings'
-              ? 'text-[#E8A0BF]'
-              : 'text-[#B8A8AC] dark:text-[#6A5A5E]'
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 transition-colors ${
+            active === 'settings' ? 'text-[#E8A0BF]' : 'text-[#B8A8AC] dark:text-[#6A5A5E]'
           }`}
         >
           <Settings className="w-5 h-5" />
-          <span className="text-[10px]">设置</span>
+          <span className="text-[10px]">我的</span>
         </button>
       </div>
     </div>

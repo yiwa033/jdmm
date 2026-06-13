@@ -1,41 +1,124 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import LockScreen from '@/components/diary/LockScreen'
 import MainFeed from '@/components/diary/MainFeed'
 import NewEntry from '@/components/diary/NewEntry'
 import CalendarView from '@/components/diary/CalendarView'
 import Settings from '@/components/diary/Settings'
 import BottomNav from '@/components/diary/BottomNav'
+import MoodTrend from '@/components/diary/MoodTrend'
+import type { MoodValue, WeatherValue } from '@/components/diary/Selectors'
 
-type Tab = 'feed' | 'calendar' | 'new' | 'settings'
+type Tab = 'feed' | 'calendar' | 'new' | 'settings' | 'trend'
+
+const AUTO_LOCK_MS = 30 * 1000 // 30 seconds auto-lock
 
 export default function Home() {
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null)
+  const [isDecoy, setIsDecoy] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('feed')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
-
-  const handleUnlock = useCallback((key: CryptoKey) => {
-    setCryptoKey(key)
-  }, [])
+  const [editingEntry, setEditingEntry] = useState<{
+    id: string
+    text: string
+    mood: MoodValue | ''
+    weather: WeatherValue | ''
+    temperature: string
+  } | null>(null)
+  const lastActivityRef = useRef<number>(Date.now())
 
   const handleLock = useCallback(() => {
     setCryptoKey(null)
+    setIsDecoy(false)
     setActiveTab('feed')
+    setEditingEntry(null)
+  }, [])
+
+  // Auto-lock: check inactivity every 5 seconds
+  useEffect(() => {
+    if (!cryptoKey) return
+    const timer = setInterval(() => {
+      if (Date.now() - lastActivityRef.current > AUTO_LOCK_MS) {
+        handleLock()
+      }
+    }, 5000)
+    return () => clearInterval(timer)
+  }, [cryptoKey, handleLock])
+
+  // Track activity: reset timer on any interaction
+  useEffect(() => {
+    if (!cryptoKey) return
+    const resetTimer = () => {
+      lastActivityRef.current = Date.now()
+    }
+    window.addEventListener('touchstart', resetTimer)
+    window.addEventListener('mousedown', resetTimer)
+    window.addEventListener('keydown', resetTimer)
+    window.addEventListener('scroll', resetTimer, true)
+    return () => {
+      window.removeEventListener('touchstart', resetTimer)
+      window.removeEventListener('mousedown', resetTimer)
+      window.removeEventListener('keydown', resetTimer)
+      window.removeEventListener('scroll', resetTimer, true)
+    }
+  }, [cryptoKey])
+
+  const handleUnlock = useCallback((key: CryptoKey, decoy: boolean) => {
+    setCryptoKey(key)
+    setIsDecoy(decoy)
+    lastActivityRef.current = Date.now()
   }, [])
 
   const handleEntrySubmitted = useCallback(() => {
     setRefreshTrigger((prev) => prev + 1)
     setActiveTab('feed')
+    setEditingEntry(null)
   }, [])
 
   const handleDeleteEntry = useCallback((_id: string) => {
     setRefreshTrigger((prev) => prev + 1)
   }, [])
 
+  const handleEditEntry = useCallback((entry: {
+    id: string
+    text: string
+    mood: MoodValue | ''
+    weather: WeatherValue | ''
+    temperature: string
+  }) => {
+    setEditingEntry(entry)
+    setActiveTab('new')
+  }, [])
+
   // Show lock screen if not unlocked
   if (!cryptoKey) {
     return <LockScreen onUnlock={handleUnlock} />
+  }
+
+  // Decoy mode: show empty diary (looks normal but has no data)
+  if (isDecoy) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#FFF8F0] dark:bg-[#1A1614]">
+        <header className="sticky top-0 z-40 bg-white/80 dark:bg-[#1A1614]/80 backdrop-blur-lg border-b border-[#E8D5DE]/30 dark:border-[#4A3540]/30">
+          <div className="max-w-lg mx-auto flex items-center justify-between h-12 px-4">
+            <h1 className="text-lg font-bold bg-gradient-to-r from-[#E8A0BF] to-[#F2C57C] bg-clip-text text-transparent">
+              心语日记
+            </h1>
+          </div>
+        </header>
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6">
+          <div className="w-24 h-24 rounded-full bg-[#FFF0F5] dark:bg-[#3A2028] flex items-center justify-center">
+            <span className="text-4xl">🌙</span>
+          </div>
+          <p className="text-[#9B8A8E] dark:text-[#A89890] text-center">
+            还没有记录哦~<br />
+            <span className="text-sm">点击下方按钮，记录此刻的心情</span>
+          </p>
+        </div>
+        <BottomNav active="feed" onChange={() => {}} />
+      </div>
+    )
   }
 
   return (
@@ -59,8 +142,9 @@ export default function Home() {
         {activeTab === 'feed' && (
           <MainFeed
             cryptoKey={cryptoKey}
-            onNewEntry={() => setActiveTab('new')}
+            onNewEntry={() => { setEditingEntry(null); setActiveTab('new') }}
             onDeleteEntry={handleDeleteEntry}
+            onEditEntry={handleEditEntry}
             refreshTrigger={refreshTrigger}
           />
         )}
@@ -71,8 +155,12 @@ export default function Home() {
           <NewEntry
             cryptoKey={cryptoKey}
             onSubmitted={handleEntrySubmitted}
-            onCancel={() => setActiveTab('feed')}
+            onCancel={() => { setEditingEntry(null); setActiveTab('feed') }}
+            editingEntry={editingEntry}
           />
+        )}
+        {activeTab === 'trend' && (
+          <MoodTrend cryptoKey={cryptoKey} />
         )}
         {activeTab === 'settings' && (
           <Settings onLock={handleLock} />
@@ -80,7 +168,7 @@ export default function Home() {
       </div>
 
       {/* Bottom Navigation */}
-      <BottomNav active={activeTab} onChange={setActiveTab} />
+      <BottomNav active={activeTab} onChange={(tab) => { setEditingEntry(null); setActiveTab(tab as Tab) }} />
     </div>
   )
 }

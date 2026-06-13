@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { Lock, Heart, ShieldCheck } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Lock, Heart, ShieldCheck, Camera } from 'lucide-react'
 import { deriveKey, hashPin, generateSalt, hexToBytes } from '@/lib/crypto'
 
 interface LockScreenProps {
-  onUnlock: (key: CryptoKey) => void
+  onUnlock: (key: CryptoKey, isDecoy: boolean) => void
 }
 
 export default function LockScreen({ onUnlock }: LockScreenProps) {
@@ -18,6 +18,7 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
   const [attempts, setAttempts] = useState(0)
   const [cooldown, setCooldown] = useState(0)
   const checkRef = useRef(false)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
 
   // Check password exists on mount
   useEffect(() => {
@@ -46,6 +47,33 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
     }
   }, [cooldown])
 
+  // Capture intruder photo via front camera
+  const captureIntruderPhoto = async (): Promise<string | null> => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: 320, height: 240 },
+        audio: false,
+      })
+      const video = document.createElement('video')
+      video.srcObject = stream
+      video.setAttribute('playsinline', '')
+      await video.play()
+      // Wait a moment for camera to stabilize
+      await new Promise((r) => setTimeout(r, 500))
+      const canvas = document.createElement('canvas')
+      canvas.width = 320
+      canvas.height = 240
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(video, 0, 0, 320, 240)
+      const photoData = canvas.toDataURL('image/jpeg', 0.6)
+      stream.getTracks().forEach((t) => t.stop())
+      return photoData
+    } catch {
+      // Camera not available or permission denied
+      return null
+    }
+  }
+
   const handlePinComplete = useCallback(async (currentPin: string) => {
     if (isSetup === null) return
 
@@ -63,6 +91,7 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
         })
         const data = await res.json()
         if (data.valid && data.salt) {
+          const isDecoy = data.mode === 'decoy'
           const saltBytes = hexToBytes(data.salt)
           const key = await deriveKey(currentPin, saltBytes)
           // Record successful login
@@ -71,19 +100,29 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ success: true }),
           }).catch(() => {})
-          onUnlock(key)
+          onUnlock(key, isDecoy)
         } else {
           const newAttempts = attempts + 1
           setAttempts(newAttempts)
+          // After 3 failed attempts: capture photo, then cooldown
           if (newAttempts >= 3) {
+            // Try to capture intruder photo
+            const photo = await captureIntruderPhoto()
+            if (photo) {
+              fetch('/api/log/intruder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ photoData: photo }),
+              }).catch(() => {})
+            }
             setCooldown(30)
             setAttempts(0)
-            setError('错误次数过多，请30秒后重试')
+            setError('⚠️ 错误次数过多，已记录，请30秒后重试')
           } else {
             setError(`密码错误，还有${3 - newAttempts}次机会`)
           }
           setPin('')
-          // Record failed login attempt
+          // Record failed login
           fetch('/api/log/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -129,13 +168,12 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
       if (data.success) {
         const saltBytes = hexToBytes(salt)
         const key = await deriveKey(currentPin, saltBytes)
-        // Record first-time setup as a login
         fetch('/api/log/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ success: true }),
         }).catch(() => {})
-        onUnlock(key)
+        onUnlock(key, false)
       } else {
         setError(data.error || '设置失败')
       }
@@ -145,7 +183,6 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
     setLoading(false)
   }, [isSetup, step, firstPin, attempts, cooldown, onUnlock])
 
-  // Handle number press - check pin length directly in handler
   const handleNumPress = (num: number | string) => {
     if (num === 'del') {
       setPin((p) => p.slice(0, -1))
@@ -154,7 +191,6 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
     const newPin = pin + String(num)
     setPin(newPin)
     if (newPin.length === 4 && !loading && cooldown === 0) {
-      // Use setTimeout to defer the async call out of the render cycle
       setTimeout(() => handlePinComplete(newPin), 0)
     }
   }
@@ -175,6 +211,9 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-gradient-to-b from-[#FFF0F5] to-[#FFF8F0] dark:from-[#1A1614] dark:to-[#2A1F1E]">
+      {/* Hidden video element for camera capture */}
+      <video ref={videoRef} className="hidden" playsInline />
+
       <div className="w-full max-w-xs flex flex-col items-center gap-6">
         {/* Logo */}
         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#E8A0BF] to-[#F2C57C] flex items-center justify-center shadow-lg shadow-[#E8A0BF]/20">
@@ -238,7 +277,7 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
           </p>
         )}
 
-        <div className="flex items-center gap-2 text-xs text-[#B8A8AC] dark:text-[#6A5A5E] mt-6">
+        <div className="flex items-center gap-2 text-xs text-[#B8A8AC] dark:text-[#6A5A5E] mt-4">
           <ShieldCheck className="w-3.5 h-3.5" />
           <span>AES-256端到端加密 · 你的秘密只属于你</span>
         </div>

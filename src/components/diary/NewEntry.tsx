@@ -32,18 +32,26 @@ interface NewEntryProps {
   cryptoKey: CryptoKey
   onSubmitted: () => void
   onCancel: () => void
+  editingEntry?: {
+    id: string
+    text: string
+    mood: MoodValue | ''
+    weather: WeatherValue | ''
+    temperature: string
+  } | null
 }
 
-export default function NewEntry({ cryptoKey, onSubmitted, onCancel }: NewEntryProps) {
-  const [text, setText] = useState('')
-  const [mood, setMood] = useState<MoodValue | ''>('')
-  const [weather, setWeather] = useState<WeatherValue | ''>('')
-  const [temperature, setTemperature] = useState('')
+export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntry }: NewEntryProps) {
+  const [text, setText] = useState(editingEntry?.text || '')
+  const [mood, setMood] = useState<MoodValue | ''>(editingEntry?.mood || '')
+  const [weather, setWeather] = useState<WeatherValue | ''>(editingEntry?.weather || '')
+  const [temperature, setTemperature] = useState(editingEntry?.temperature || '')
   const [imageBase64, setImageBase64] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [weatherLoading, setWeatherLoading] = useState(true)
-  const [locationStatus, setLocationStatus] = useState<'loading' | 'success' | 'failed'>('loading')
+  const [weatherLoading, setWeatherLoading] = useState(!editingEntry)
+  const [locationStatus, setLocationStatus] = useState<'loading' | 'success' | 'failed'>(editingEntry ? 'success' : 'loading')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const isEditing = !!editingEntry
 
   const [currentTime, setCurrentTime] = useState(new Date())
 
@@ -150,18 +158,31 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel }: NewEntryP
         encryptedImage = await encrypt(imageBase64, cryptoKey)
       }
 
-      const entryDate = new Date().toISOString().slice(0, 10)
-      const res = await fetch('/api/diary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          encryptedContent,
-          encryptedImage,
-          entryDate,
-        }),
-      })
-      if (res.ok) {
-        onSubmitted()
+      if (isEditing && editingEntry) {
+        // Update existing entry
+        const res = await fetch(`/api/diary/${editingEntry.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ encryptedContent, encryptedImage }),
+        })
+        if (res.ok) {
+          onSubmitted()
+        }
+      } else {
+        // Create new entry
+        const entryDate = new Date().toISOString().slice(0, 10)
+        const res = await fetch('/api/diary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            encryptedContent,
+            encryptedImage,
+            entryDate,
+          }),
+        })
+        if (res.ok) {
+          onSubmitted()
+        }
       }
     } catch (e) {
       console.error('Submit failed:', e)
@@ -176,13 +197,13 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel }: NewEntryP
         <button onClick={onCancel} className="text-[#9B8A8E] dark:text-[#A89890] text-sm">
           取消
         </button>
-        <h2 className="font-semibold text-[#3D2C2E] dark:text-[#F5E6D3]">新的记录</h2>
+        <h2 className="font-semibold text-[#3D2C2E] dark:text-[#F5E6D3]">{isEditing ? '编辑记录' : '新的记录'}</h2>
         <Button
           onClick={handleSubmit}
           disabled={!text.trim() || submitting}
           className="bg-gradient-to-r from-[#E8A0BF] to-[#F2C57C] text-white rounded-xl px-4 h-8 text-sm"
         >
-          {submitting ? '保存中...' : '记录 ✨'}
+          {submitting ? '保存中...' : isEditing ? '保存修改 ✨' : '记录 ✨'}
         </Button>
       </div>
 

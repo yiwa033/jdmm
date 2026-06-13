@@ -23,10 +23,17 @@ interface MainFeedProps {
   cryptoKey: CryptoKey
   onNewEntry: () => void
   onDeleteEntry: (id: string) => void
+  onEditEntry: (entry: {
+    id: string
+    text: string
+    mood: MoodValue | ''
+    weather: WeatherValue | ''
+    temperature: string
+  }) => void
   refreshTrigger: number
 }
 
-export default function MainFeed({ cryptoKey, onNewEntry, onDeleteEntry, refreshTrigger }: MainFeedProps) {
+export default function MainFeed({ cryptoKey, onNewEntry, onDeleteEntry, onEditEntry, refreshTrigger }: MainFeedProps) {
   const [entries, setEntries] = useState<DecryptedEntry[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -137,7 +144,7 @@ export default function MainFeed({ cryptoKey, onNewEntry, onDeleteEntry, refresh
               </div>
               <div className="space-y-3">
                 {items.map((entry) => (
-                  <DiaryCard key={entry.id} entry={entry} onDelete={handleDelete} />
+                  <DiaryCard key={entry.id} entry={entry} onDelete={handleDelete} onEdit={onEditEntry} />
                 ))}
               </div>
             </div>
