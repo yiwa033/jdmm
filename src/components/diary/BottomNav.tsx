@@ -1,8 +1,8 @@
 'use client'
 
-import { Home, CalendarPlus, PlusCircle, Settings, TrendingUp, Sparkles, Cat } from 'lucide-react'
+import { Home, CalendarPlus, PlusCircle, Settings, Sparkles, Cat } from 'lucide-react'
 
-type Tab = 'feed' | 'calendar' | 'new' | 'trend' | 'pet' | 'settings'
+type Tab = 'feed' | 'calendar' | 'new' | 'pet' | 'settings'
 
 interface BottomNavProps {
   active: Tab
@@ -24,13 +24,13 @@ export default function BottomNav({ active, onChange }: BottomNavProps) {
         </button>
 
         <button
-          onClick={() => onChange('trend')}
+          onClick={() => onChange('calendar')}
           className={`flex flex-col items-center gap-0.5 px-2 py-1 transition-colors ${
-            active === 'trend' ? 'text-[#E8A0BF]' : 'text-[#B8A8AC] dark:text-[#6A5A5E]'
+            active === 'calendar' ? 'text-[#E8A0BF]' : 'text-[#B8A8AC] dark:text-[#6A5A5E]'
           }`}
         >
-          <TrendingUp className="w-5 h-5" />
-          <span className="text-[10px]">趋势</span>
+          <CalendarPlus className="w-5 h-5" />
+          <span className="text-[10px]">日历</span>
         </button>
 
         {/* Center New Button */}

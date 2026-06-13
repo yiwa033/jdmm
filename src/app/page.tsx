@@ -7,11 +7,10 @@ import NewEntry from '@/components/diary/NewEntry'
 import CalendarView from '@/components/diary/CalendarView'
 import Settings from '@/components/diary/Settings'
 import BottomNav from '@/components/diary/BottomNav'
-import MoodTrend from '@/components/diary/MoodTrend'
 import PetCompanion from '@/components/diary/PetCompanion'
 import type { MoodValue, WeatherValue } from '@/components/diary/Selectors'
 
-type Tab = 'feed' | 'calendar' | 'new' | 'trend' | 'pet' | 'settings'
+type Tab = 'feed' | 'calendar' | 'new' | 'pet' | 'settings'
 
 const AUTO_LOCK_MS = 30 * 1000 // 30 seconds auto-lock
 
@@ -159,9 +158,6 @@ export default function Home() {
             onCancel={() => { setEditingEntry(null); setActiveTab('feed') }}
             editingEntry={editingEntry}
           />
-        )}
-        {activeTab === 'trend' && (
-          <MoodTrend cryptoKey={cryptoKey} />
         )}
         {activeTab === 'pet' && (
           <PetCompanion />
