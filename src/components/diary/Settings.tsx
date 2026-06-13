@@ -1,13 +1,39 @@
 'use client'
 
-import { useState } from 'react'
-import { ShieldCheck, Lock, Info } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Lock, ShieldCheck, Info, Eye, Smartphone, Clock, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { hashPin, generateSalt, hexToBytes, deriveKey } from '@/lib/crypto'
+
+interface LoginLogEntry {
+  id: string
+  ip: string
+  userAgent: string
+  success: boolean
+  createdAt: string
+}
 
 interface SettingsProps {
   onLock: () => void
+}
+
+// Parse user agent to simple device info
+function parseUserAgent(ua: string): string {
+  if (/iPhone/i.test(ua)) return 'iPhone'
+  if (/iPad/i.test(ua)) return 'iPad'
+  if (/Android/i.test(ua)) return 'Android'
+  if (/Mac/i.test(ua)) return 'Mac'
+  if (/Windows/i.test(ua)) return 'Windows'
+  if (/Linux/i.test(ua)) return 'Linux'
+  return '未知设备'
+}
+
+function parseBrowser(ua: string): string {
+  if (/Edg/i.test(ua)) return 'Edge'
+  if (/Chrome/i.test(ua)) return 'Chrome'
+  if (/Safari/i.test(ua)) return 'Safari'
+  if (/Firefox/i.test(ua)) return 'Firefox'
+  return '浏览器'
 }
 
 export default function Settings({ onLock }: SettingsProps) {
@@ -17,6 +43,26 @@ export default function Settings({ onLock }: SettingsProps) {
   const [confirmPin, setConfirmPin] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [loginLogs, setLoginLogs] = useState<LoginLogEntry[]>([])
+  const [openCount, setOpenCount] = useState(0)
+
+  // Load login logs
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch('/api/log/login')
+        const data = await res.json()
+        if (cancelled) return
+        setLoginLogs(data.logs || [])
+        setOpenCount(data.openCount || 0)
+      } catch (e) {
+        console.error('Load login logs failed:', e)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
 
   const handleChangePin = async () => {
     setError('')
@@ -32,7 +78,7 @@ export default function Settings({ onLock }: SettingsProps) {
     }
 
     try {
-      const oldHash = await hashPin(oldPin)
+      const oldHash = await hashPinLocal(oldPin)
       const verifyRes = await fetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -44,12 +90,8 @@ export default function Settings({ onLock }: SettingsProps) {
         return
       }
 
-      // Delete old password and create new one
-      const newSalt = generateSalt()
-      const newHash = await hashPin(newPin)
-
-      // Use setup API after deleting - we'll just call setup
-      // First delete via a direct approach
+      const newSalt = generateSaltLocal()
+      const newHash = await hashPinLocal(newPin)
       const setupRes = await fetch('/api/auth/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -62,7 +104,6 @@ export default function Settings({ onLock }: SettingsProps) {
         setOldPin('')
         setNewPin('')
         setConfirmPin('')
-        // Lock the app so user needs to re-enter
         setTimeout(() => onLock(), 1500)
       } else {
         setError('修改失败，请重试')
@@ -74,7 +115,25 @@ export default function Settings({ onLock }: SettingsProps) {
 
   return (
     <div className="flex-1 overflow-y-auto pb-24 px-4 pt-4 space-y-4">
-      <h2 className="text-lg font-semibold text-[#3D2C2E] dark:text-[#F5E6D3]">设置</h2>
+      <h2 className="text-lg font-semibold text-[#3D2C2E] dark:text-[#F5E6D3]">个人中心</h2>
+
+      {/* Open Count */}
+      <div className="p-4 bg-gradient-to-r from-[#FFF0F5] to-[#FFF8F0] dark:from-[#3A2028] dark:to-[#2A1F1E] rounded-2xl border border-[#E8D5DE]/30 dark:border-[#4A3540]/30">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-white/80 dark:bg-[#1A1614]/80 flex items-center justify-center">
+              <Eye className="w-5 h-5 text-[#E8A0BF]" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[#3D2C2E] dark:text-[#F5E6D3]">打开次数</p>
+              <p className="text-xs text-[#9B8A8E]">累计成功解锁次数</p>
+            </div>
+          </div>
+          <span className="text-3xl font-bold bg-gradient-to-r from-[#E8A0BF] to-[#F2C57C] bg-clip-text text-transparent">
+            {openCount}
+          </span>
+        </div>
+      </div>
 
       {/* Lock App */}
       <button
@@ -157,6 +216,74 @@ export default function Settings({ onLock }: SettingsProps) {
       {error && <p className="text-sm text-red-400 text-center">{error}</p>}
       {message && <p className="text-sm text-green-400 text-center">{message}</p>}
 
+      {/* Login Log */}
+      <div className="p-4 bg-white/70 dark:bg-[#2A1F1E]/70 rounded-2xl border border-[#E8D5DE]/40 dark:border-[#4A3540]/40">
+        <div className="flex items-center gap-2 mb-3">
+          <Clock className="w-5 h-5 text-[#E8A0BF]" />
+          <h3 className="text-sm font-semibold text-[#3D2C2E] dark:text-[#F5E6D3]">登录日志</h3>
+          <span className="text-xs text-[#B8A8AC] ml-auto">最近50条</span>
+        </div>
+
+        {loginLogs.length === 0 ? (
+          <p className="text-xs text-[#B8A8AC] text-center py-4">暂无登录记录</p>
+        ) : (
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {loginLogs.map((log) => {
+              const date = new Date(log.createdAt)
+              const dateStr = date.toLocaleDateString('zh-CN', {
+                month: 'short',
+                day: 'numeric',
+                weekday: 'short',
+              })
+              const timeStr = date.toLocaleTimeString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+              })
+              const device = parseUserAgent(log.userAgent)
+              const browser = parseBrowser(log.userAgent)
+
+              return (
+                <div
+                  key={log.id}
+                  className={`p-3 rounded-xl text-xs ${
+                    log.success
+                      ? 'bg-[#F0FFF0]/50 dark:bg-[#1A2A1A]/30 border border-green-200/30 dark:border-green-800/30'
+                      : 'bg-[#FFF0F0]/50 dark:bg-[#2A1A1A]/30 border border-red-200/30 dark:border-red-800/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-1.5">
+                      {log.success ? (
+                        <span className="text-green-500">✓ 成功</span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-red-400">
+                          <AlertTriangle className="w-3 h-3" />
+                          失败
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[#B8A8AC] font-mono tabular-nums">
+                      {dateStr} {timeStr}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-[#9B8A8E]">
+                    <span className="flex items-center gap-1">
+                      <Smartphone className="w-3 h-3" />
+                      {device} · {browser}
+                    </span>
+                    <span className="flex items-center gap-1 font-mono">
+                      🌐 {log.ip}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Privacy Info */}
       <div className="p-4 bg-[#FFF0F5]/50 dark:bg-[#3A2028]/30 rounded-2xl border border-[#E8D5DE]/30 dark:border-[#4A3540]/30">
         <div className="flex items-center gap-2 mb-2">
@@ -169,6 +296,7 @@ export default function Settings({ onLock }: SettingsProps) {
           <li>• 加密密钥从不离开你的设备</li>
           <li>• 服务器只存储加密后的数据</li>
           <li>• 即使数据库泄露，也无法读取内容</li>
+          <li>• 登录日志帮你发现异常访问</li>
         </ul>
       </div>
 
@@ -186,4 +314,20 @@ export default function Settings({ onLock }: SettingsProps) {
       </div>
     </div>
   )
+}
+
+// Inline crypto helpers to avoid import issues
+async function hashPinLocal(pin: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const hash = await crypto.subtle.digest('SHA-256', encoder.encode(pin))
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+function generateSaltLocal(): string {
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  return Array.from(salt)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
 }

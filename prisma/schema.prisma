@@ -20,6 +20,15 @@ model AppPassword {
   id           String   @id @default(cuid())
   passwordHash String   // SHA-256 hash of password (for verification)
   keySalt      String   // PBKDF2 salt for AES key derivation (stored in hex)
+  openCount    Int      @default(0) // Total app open count
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model LoginLog {
+  id        String   @id @default(cuid())
+  ip        String   // IP address
+  userAgent String   // Browser/device info
+  success   Boolean  // Login success or failed attempt
+  createdAt DateTime @default(now())
 }

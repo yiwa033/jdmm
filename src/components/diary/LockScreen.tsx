@@ -65,6 +65,12 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
         if (data.valid && data.salt) {
           const saltBytes = hexToBytes(data.salt)
           const key = await deriveKey(currentPin, saltBytes)
+          // Record successful login
+          fetch('/api/log/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ success: true }),
+          }).catch(() => {})
           onUnlock(key)
         } else {
           const newAttempts = attempts + 1
@@ -77,6 +83,12 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
             setError(`密码错误，还有${3 - newAttempts}次机会`)
           }
           setPin('')
+          // Record failed login attempt
+          fetch('/api/log/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ success: false }),
+          }).catch(() => {})
         }
       } catch {
         setError('验证失败，请重试')
@@ -117,6 +129,12 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
       if (data.success) {
         const saltBytes = hexToBytes(salt)
         const key = await deriveKey(currentPin, saltBytes)
+        // Record first-time setup as a login
+        fetch('/api/log/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ success: true }),
+        }).catch(() => {})
         onUnlock(key)
       } else {
         setError(data.error || '设置失败')
