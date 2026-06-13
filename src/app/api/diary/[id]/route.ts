@@ -21,14 +21,16 @@ export async function PUT(
 ) {
   try {
     const { id } = await params
-    const { encryptedContent, encryptedImage } = await request.json()
+    const body = await request.json()
+    const updateData: Record<string, unknown> = { updatedAt: new Date() }
+
+    if (body.encryptedContent !== undefined) updateData.encryptedContent = body.encryptedContent
+    if (body.encryptedImage !== undefined) updateData.encryptedImage = body.encryptedImage || null
+    if (body.isPinned !== undefined) updateData.isPinned = body.isPinned
+
     const entry = await db.diaryEntry.update({
       where: { id },
-      data: {
-        encryptedContent,
-        encryptedImage: encryptedImage || null,
-        updatedAt: new Date(),
-      },
+      data: updateData,
     })
     return NextResponse.json(entry)
   } catch (error) {

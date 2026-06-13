@@ -1,13 +1,13 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Camera, X, MapPin, Loader2 } from 'lucide-react'
+import { Camera, X, MapPin, Loader2, Hash } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import { MoodSelector, WeatherSelector, type MoodValue, type WeatherValue } from './Selectors'
 import { encrypt } from '@/lib/crypto'
 
-// Open-Meteo weather code to our weather value mapping
 function weatherCodeToValue(code: number): WeatherValue {
   if (code === 0) return 'sunny'
   if (code <= 3) return 'cloudy'
@@ -28,6 +28,8 @@ const WEATHER_LABELS: Record<WeatherValue, string> = {
   windy: '风',
 }
 
+const PRESET_TAGS = ['生活', '工作', '学习', '旅行', '美食', '运动', '阅读', '音乐', '电影', '灵感']
+
 interface NewEntryProps {
   cryptoKey: CryptoKey
   onSubmitted: () => void
@@ -47,6 +49,8 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
   const [weather, setWeather] = useState<WeatherValue | ''>(editingEntry?.weather || '')
   const [temperature, setTemperature] = useState(editingEntry?.temperature || '')
   const [imageBase64, setImageBase64] = useState('')
+  const [tags, setTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [weatherLoading, setWeatherLoading] = useState(!editingEntry)
   const [locationStatus, setLocationStatus] = useState<'loading' | 'success' | 'failed'>(editingEntry ? 'success' : 'loading')
@@ -55,33 +59,30 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
 
   const [currentTime, setCurrentTime] = useState(new Date())
 
-  // Update time every second
+  // Word count
+  const charCount = text.length
+  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
 
-  // Auto-fetch weather on mount
   useEffect(() => {
     const fetchWeather = async () => {
       setWeatherLoading(true)
       try {
-        // Try to get location from browser
         const position = await new Promise<GeolocationPosition>((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(resolve, reject, {
             timeout: 8000,
-            maximumAge: 300000, // 5 min cache
+            maximumAge: 300000,
           })
         })
-
         const { latitude, longitude } = position.coords
-
-        // Open-Meteo API — completely free, no API key needed
         const res = await fetch(
           `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`
         )
         const data = await res.json()
-
         if (data.current_weather) {
           const { temperature: temp, weathercode } = data.current_weather
           setTemperature(Math.round(temp).toString())
@@ -89,7 +90,6 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
           setLocationStatus('success')
         }
       } catch {
-        // Location failed — try IP-based fallback
         try {
           const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=39.9&longitude=116.4&current_weather=true')
           const data = await res.json()
@@ -99,13 +99,12 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
             setWeather(weatherCodeToValue(weathercode))
           }
         } catch {
-          // Final fallback — leave empty, user can manually select
+          // fallback
         }
         setLocationStatus('failed')
       }
       setWeatherLoading(false)
     }
-
     fetchWeather()
   }, [])
 
@@ -120,13 +119,8 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
         let w = img.width
         let h = img.height
         if (w > MAX || h > MAX) {
-          if (w > h) {
-            h = (h * MAX) / w
-            w = MAX
-          } else {
-            w = (w * MAX) / h
-            h = MAX
-          }
+          if (w > h) { h = (h * MAX) / w; w = MAX }
+          else { w = (w * MAX) / h; h = MAX }
         }
         const canvas = document.createElement('canvas')
         canvas.width = w
@@ -141,6 +135,27 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
     reader.readAsDataURL(file)
   }
 
+  const addTag = (tag: string) => {
+    const t = tag.trim()
+    if (t && !tags.includes(t) && tags.length < 5) {
+      setTags([...tags, t])
+    }
+  }
+
+  const removeTag = (tag: string) => {
+    setTags(tags.filter((t) => t !== tag))
+  }
+
+  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      if (tagInput.trim()) {
+        addTag(tagInput)
+        setTagInput('')
+      }
+    }
+  }
+
   const handleSubmit = async () => {
     if (!text.trim()) return
     setSubmitting(true)
@@ -151,6 +166,7 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
         weather,
         temperature,
         recordedAt: new Date().toISOString(),
+        tags,
       })
       const encryptedContent = await encrypt(content, cryptoKey)
       let encryptedImage: string | null = null
@@ -159,14 +175,12 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
       }
 
       if (isEditing && editingEntry) {
-        // Update existing entry
         const res = await fetch(`/api/diary/${editingEntry.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ encryptedContent, encryptedImage }),
         })
         if (res.ok) {
-          // Pet gains exp when editing diary
           fetch('/api/pet', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -175,7 +189,6 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
           onSubmitted()
         }
       } else {
-        // Create new entry
         const entryDate = new Date().toISOString().slice(0, 10)
         const res = await fetch('/api/diary', {
           method: 'POST',
@@ -187,7 +200,6 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
           }),
         })
         if (res.ok) {
-          // Pet gains exp when writing diary
           fetch('/api/pet', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -223,7 +235,6 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
         {/* Auto Info Bar */}
         <div className="bg-white/60 dark:bg-[#2A1F1E]/60 rounded-2xl p-3 border border-[#E8D5DE]/30 dark:border-[#4A3540]/30">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            {/* Date & Time — auto, precise to seconds */}
             <div className="flex items-center gap-1.5 text-sm text-[#3D2C2E] dark:text-[#F5E6D3]">
               <span>📅</span>
               <span>
@@ -246,8 +257,6 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
                 })}
               </span>
             </div>
-
-            {/* Weather Auto */}
             <div className="flex items-center gap-1.5 text-sm">
               {weatherLoading ? (
                 <span className="flex items-center gap-1 text-[#B8A8AC]">
@@ -258,9 +267,7 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
                 <>
                   <span>{WEATHER_LABELS[weather]}</span>
                   {temperature && <span className="text-[#9B8A8E]">{temperature}°C</span>}
-                  {locationStatus === 'success' && (
-                    <MapPin className="w-3 h-3 text-[#E8A0BF]" />
-                  )}
+                  {locationStatus === 'success' && <MapPin className="w-3 h-3 text-[#E8A0BF]" />}
                 </>
               ) : (
                 <span className="text-xs text-[#B8A8AC]">天气获取失败</span>
@@ -269,13 +276,64 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
           </div>
         </div>
 
-        {/* Text Area */}
-        <Textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="此刻的心情..."
-          className="min-h-[160px] bg-white/60 dark:bg-[#2A1F1E]/60 border-[#E8D5DE]/40 dark:border-[#4A3540]/40 rounded-2xl text-[#3D2C2E] dark:text-[#F5E6D3] placeholder:text-[#C8B8BC] resize-none text-[15px] leading-relaxed focus:ring-[#E8A0BF]/30"
-        />
+        {/* Text Area with word count */}
+        <div className="relative">
+          <Textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="此刻的心情..."
+            className="min-h-[160px] bg-white/60 dark:bg-[#2A1F1E]/60 border-[#E8D5DE]/40 dark:border-[#4A3540]/40 rounded-2xl text-[#3D2C2E] dark:text-[#F5E6D3] placeholder:text-[#C8B8BC] resize-none text-[15px] leading-relaxed focus:ring-[#E8A0BF]/30 pb-8"
+          />
+          <div className="absolute bottom-2 right-3 flex items-center gap-2 text-[10px] text-[#C8B8BC]">
+            <span>{charCount}字</span>
+            {charCount > 0 && <span>· {wordCount}词</span>}
+          </div>
+        </div>
+
+        {/* Tags */}
+        <div>
+          <label className="text-sm font-medium text-[#3D2C2E] dark:text-[#F5E6D3] mb-2 flex items-center gap-1.5">
+            <Hash className="w-4 h-4 text-[#E8A0BF]" />
+            标签 <span className="text-xs text-[#B8A8AC] font-normal">（最多5个，回车添加）</span>
+          </label>
+          {/* Selected tags */}
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#FFF0F5] dark:bg-[#3A2028] text-[#E8A0BF] text-xs rounded-lg border border-[#E8D5DE]/40 dark:border-[#4A3540]/40"
+                >
+                  #{tag}
+                  <button onClick={() => removeTag(tag)} className="hover:text-red-400">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          {/* Tag input */}
+          <Input
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={handleTagKeyDown}
+            placeholder="输入标签，按回车添加"
+            maxLength={10}
+            className="bg-white/60 dark:bg-[#1A1614]/60 border-[#E8D5DE]/40 dark:border-[#4A3540]/40 rounded-xl h-9 text-sm"
+          />
+          {/* Preset tags */}
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {PRESET_TAGS.filter((t) => !tags.includes(t)).map((tag) => (
+              <button
+                key={tag}
+                onClick={() => addTag(tag)}
+                className="px-2.5 py-1 bg-white/50 dark:bg-[#2A1F1E]/50 text-[#9B8A8E] text-xs rounded-lg border border-[#E8D5DE]/30 dark:border-[#4A3540]/30 hover:border-[#E8A0BF] hover:text-[#E8A0BF] transition-colors active:scale-95"
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Image */}
         {imageBase64 ? (
@@ -297,23 +355,15 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
             <span className="text-sm">添加图片</span>
           </button>
         )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleImageUpload}
-        />
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
 
         {/* Mood */}
         <div>
-          <label className="text-sm font-medium text-[#3D2C2E] dark:text-[#F5E6D3] mb-2 block">
-            心情
-          </label>
+          <label className="text-sm font-medium text-[#3D2C2E] dark:text-[#F5E6D3] mb-2 block">心情</label>
           <MoodSelector value={mood} onChange={setMood} />
         </div>
 
-        {/* Weather (auto-filled, but can override) */}
+        {/* Weather */}
         <div>
           <label className="text-sm font-medium text-[#3D2C2E] dark:text-[#F5E6D3] mb-2 block">
             天气 <span className="text-xs text-[#B8A8AC] font-normal">（已自动获取，可修改）</span>
@@ -321,23 +371,16 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
           <WeatherSelector value={weather} onChange={setWeather} />
         </div>
 
-        {/* Temperature (auto-filled, but can override) */}
+        {/* Temperature */}
         <div>
           <label className="text-sm font-medium text-[#3D2C2E] dark:text-[#F5E6D3] mb-2 block">
             温度 <span className="text-xs text-[#B8A8AC] font-normal">（已自动获取，可修改）</span>
           </label>
           <div className="flex items-center gap-2">
-            <span className="text-lg font-semibold text-[#3D2C2E] dark:text-[#F5E6D3]">
-              {temperature || '—'}
-            </span>
+            <span className="text-lg font-semibold text-[#3D2C2E] dark:text-[#F5E6D3]">{temperature || '—'}</span>
             <span className="text-[#9B8A8E] dark:text-[#A89890]">°C</span>
             {temperature && (
-              <button
-                onClick={() => setTemperature('')}
-                className="text-xs text-[#B8A8AC] ml-2 hover:text-[#E8A0BF]"
-              >
-                修改
-              </button>
+              <button onClick={() => setTemperature('')} className="text-xs text-[#B8A8AC] ml-2 hover:text-[#E8A0BF]">修改</button>
             )}
           </div>
         </div>

@@ -91,12 +91,16 @@ export default function Home() {
     setActiveTab('new')
   }, [])
 
+  const handlePinEntry = useCallback((_id: string, _pinned: boolean) => {
+    setRefreshTrigger((prev) => prev + 1)
+  }, [])
+
   // Show lock screen if not unlocked
   if (!cryptoKey) {
     return <LockScreen onUnlock={handleUnlock} />
   }
 
-  // Decoy mode: show empty diary (looks normal but has no data)
+  // Decoy mode: show empty diary
   if (isDecoy) {
     return (
       <div className="min-h-screen flex flex-col bg-[#FFF8F0] dark:bg-[#1A1614]">
@@ -145,6 +149,7 @@ export default function Home() {
             onNewEntry={() => { setEditingEntry(null); setActiveTab('new') }}
             onDeleteEntry={handleDeleteEntry}
             onEditEntry={handleEditEntry}
+            onPinEntry={handlePinEntry}
             refreshTrigger={refreshTrigger}
           />
         )}
@@ -163,7 +168,7 @@ export default function Home() {
           <PetCompanion />
         )}
         {activeTab === 'settings' && (
-          <Settings onLock={handleLock} />
+          <Settings onLock={handleLock} cryptoKey={cryptoKey} />
         )}
       </div>
 

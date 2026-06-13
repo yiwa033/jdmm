@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Lock, ShieldCheck, Info, Eye, Smartphone, Clock, AlertTriangle, Camera, EyeOff, Trash2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Lock, ShieldCheck, Info, Eye, Smartphone, Clock, AlertTriangle, Camera, EyeOff, Download, Upload, Moon, Sun, BarChart3, BookOpen, Flame, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { decrypt } from '@/lib/crypto'
 
 interface LoginLogEntry {
   id: string
@@ -23,6 +24,7 @@ interface IntruderPhotoEntry {
 
 interface SettingsProps {
   onLock: () => void
+  cryptoKey: CryptoKey
 }
 
 function parseUserAgent(ua: string): string {
@@ -43,7 +45,7 @@ function parseBrowser(ua: string): string {
   return '浏览器'
 }
 
-export default function Settings({ onLock }: SettingsProps) {
+export default function Settings({ onLock, cryptoKey }: SettingsProps) {
   const [changingPin, setChangingPin] = useState(false)
   const [oldPin, setOldPin] = useState('')
   const [newPin, setNewPin] = useState('')
@@ -57,6 +59,9 @@ export default function Settings({ onLock }: SettingsProps) {
   const [decoyPin, setDecoyPin] = useState('')
   const [confirmDecoyPin, setConfirmDecoyPin] = useState('')
   const [hasDecoy, setHasDecoy] = useState(false)
+  const [isDark, setIsDark] = useState(false)
+  const [stats, setStats] = useState({ totalEntries: 0, totalChars: 0, streak: 0, totalWords: 0 })
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load data
   useEffect(() => {
@@ -73,26 +78,77 @@ export default function Settings({ onLock }: SettingsProps) {
         setLoginLogs(logData.logs || [])
         setOpenCount(logData.openCount || 0)
         setIntruderPhotos(photoData || [])
-        setHasDecoy(!!logData.logs?.some?.(() => false)) // placeholder, will check properly
       } catch (e) {
         console.error('Load settings data failed:', e)
-      }
-      // Check if decoy password exists
-      try {
-        const res = await fetch('/api/auth/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin: '__check__' }),
-        })
-        // The verify endpoint returns mode info; we just check decoy exists
-        // We'll infer it from the response
-      } catch {
-        // ignore
       }
     }
     load()
     return () => { cancelled = true }
   }, [])
+
+  // Load stats from diary entries
+  useEffect(() => {
+    let cancelled = false
+    const loadStats = async () => {
+      try {
+        const res = await fetch('/api/diary')
+        const data = await res.json()
+        if (cancelled) return
+
+        let totalChars = 0
+        let totalWords = 0
+        const dates = new Set<string>()
+
+        for (const entry of data) {
+          try {
+            const contentJson = await decrypt(entry.encryptedContent, cryptoKey)
+            const content = JSON.parse(contentJson)
+            totalChars += (content.text || '').length
+            totalWords += (content.text || '').trim() ? (content.text || '').trim().split(/\s+/).length : 0
+            dates.add(entry.entryDate)
+          } catch {
+            // skip
+          }
+        }
+
+        // Calculate writing streak
+        const sortedDates = Array.from(dates).sort().reverse()
+        let streak = 0
+        const today = new Date()
+        for (let i = 0; i < 365; i++) {
+          const checkDate = new Date(today)
+          checkDate.setDate(checkDate.getDate() - i)
+          const dateStr = checkDate.toISOString().slice(0, 10)
+          if (dates.has(dateStr)) {
+            streak++
+          } else if (i > 0) {
+            break
+          }
+        }
+
+        setStats({ totalEntries: data.length, totalChars, streak, totalWords })
+      } catch (e) {
+        console.error('Load stats failed:', e)
+      }
+    }
+    loadStats()
+    return () => { cancelled = true }
+  }, [cryptoKey])
+
+  // Theme toggle
+  useEffect(() => {
+    const saved = localStorage.getItem('diary-theme')
+    const dark = saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)
+    setIsDark(dark)
+    document.documentElement.classList.toggle('dark', dark)
+  }, [])
+
+  const toggleTheme = () => {
+    const next = !isDark
+    setIsDark(next)
+    document.documentElement.classList.toggle('dark', next)
+    localStorage.setItem('diary-theme', next ? 'dark' : 'light')
+  }
 
   const handleChangePin = async () => {
     setError('')
@@ -132,13 +188,6 @@ export default function Settings({ onLock }: SettingsProps) {
     try {
       const decoySalt = generateSaltLocal()
       const decoyHash = await hashPinLocal(decoyPin)
-      // Get current real password hash and salt to keep them
-      const verifyRes = await fetch('/api/auth/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: '__check__' }),
-      })
-      // We'll just update the decoy fields
       await fetch('/api/auth/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -153,26 +202,154 @@ export default function Settings({ onLock }: SettingsProps) {
     }
   }
 
+  // Export data
+  const handleExport = async () => {
+    try {
+      setMessage('正在导出...')
+      const res = await fetch('/api/diary')
+      const data = await res.json()
+      const blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `心语日记_备份_${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      setMessage('导出成功！文件已下载')
+    } catch {
+      setError('导出失败')
+    }
+  }
+
+  // Import data
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      setMessage('正在导入...')
+      const text = await file.text()
+      const entries = JSON.parse(text)
+      if (!Array.isArray(entries)) { setError('无效的备份文件'); return }
+
+      let imported = 0
+      for (const entry of entries) {
+        if (entry.encryptedContent && entry.entryDate) {
+          try {
+            await fetch('/api/diary', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                encryptedContent: entry.encryptedContent,
+                encryptedImage: entry.encryptedImage || null,
+                entryDate: entry.entryDate,
+              }),
+            })
+            imported++
+          } catch {
+            // skip failed
+          }
+        }
+      }
+      setMessage(`导入完成！成功导入 ${imported} 条日记`)
+    } catch {
+      setError('导入失败，请检查文件格式')
+    }
+    // Reset file input
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
   return (
     <div className="flex-1 overflow-y-auto pb-24 px-4 pt-4 space-y-4">
       <h2 className="text-lg font-semibold text-[#3D2C2E] dark:text-[#F5E6D3]">个人中心</h2>
 
-      {/* Open Count */}
+      {/* Writing Stats */}
       <div className="p-4 bg-gradient-to-r from-[#FFF0F5] to-[#FFF8F0] dark:from-[#3A2028] dark:to-[#2A1F1E] rounded-2xl border border-[#E8D5DE]/30 dark:border-[#4A3540]/30">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-white/80 dark:bg-[#1A1614]/80 flex items-center justify-center">
-              <Eye className="w-5 h-5 text-[#E8A0BF]" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-[#3D2C2E] dark:text-[#F5E6D3]">打开次数</p>
-              <p className="text-xs text-[#9B8A8E]">累计成功解锁次数</p>
-            </div>
-          </div>
-          <span className="text-3xl font-bold bg-gradient-to-r from-[#E8A0BF] to-[#F2C57C] bg-clip-text text-transparent">
-            {openCount}
-          </span>
+        <div className="flex items-center gap-2 mb-3">
+          <BarChart3 className="w-5 h-5 text-[#E8A0BF]" />
+          <h3 className="text-sm font-semibold text-[#3D2C2E] dark:text-[#F5E6D3]">写作统计</h3>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-3 bg-white/60 dark:bg-[#1A1614]/40 rounded-xl">
+            <div className="flex items-center gap-1.5 mb-1">
+              <FileText className="w-3.5 h-3.5 text-[#E8A0BF]" />
+              <span className="text-[10px] text-[#9B8A8E]">总日记</span>
+            </div>
+            <p className="text-2xl font-bold bg-gradient-to-r from-[#E8A0BF] to-[#F2C57C] bg-clip-text text-transparent">{stats.totalEntries}</p>
+          </div>
+          <div className="p-3 bg-white/60 dark:bg-[#1A1614]/40 rounded-xl">
+            <div className="flex items-center gap-1.5 mb-1">
+              <BookOpen className="w-3.5 h-3.5 text-[#F2C57C]" />
+              <span className="text-[10px] text-[#9B8A8E]">总字数</span>
+            </div>
+            <p className="text-2xl font-bold bg-gradient-to-r from-[#F2C57C] to-[#FFD54F] bg-clip-text text-transparent">{stats.totalChars.toLocaleString()}</p>
+          </div>
+          <div className="p-3 bg-white/60 dark:bg-[#1A1614]/40 rounded-xl">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Flame className="w-3.5 h-3.5 text-[#E57373]" />
+              <span className="text-[10px] text-[#9B8A8E]">连续天数</span>
+            </div>
+            <p className="text-2xl font-bold bg-gradient-to-r from-[#E57373] to-[#FF8A65] bg-clip-text text-transparent">{stats.streak}</p>
+          </div>
+          <div className="p-3 bg-white/60 dark:bg-[#1A1614]/40 rounded-xl">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Eye className="w-3.5 h-3.5 text-[#A5D6A7]" />
+              <span className="text-[10px] text-[#9B8A8E]">打开次数</span>
+            </div>
+            <p className="text-2xl font-bold bg-gradient-to-r from-[#A5D6A7] to-[#66BB6A] bg-clip-text text-transparent">{openCount}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Theme Toggle */}
+      <button
+        onClick={toggleTheme}
+        className="w-full flex items-center gap-3 p-4 bg-white/70 dark:bg-[#2A1F1E]/70 rounded-2xl border border-[#E8D5DE]/40 dark:border-[#4A3540]/40 active:scale-[0.98] transition-transform"
+      >
+        <div className="w-10 h-10 rounded-full bg-[#FFF8F0] dark:bg-[#3A3020] flex items-center justify-center">
+          {isDark ? <Moon className="w-5 h-5 text-[#F2C57C]" /> : <Sun className="w-5 h-5 text-[#E8A0BF]" />}
+        </div>
+        <div className="text-left flex-1">
+          <p className="text-sm font-medium text-[#3D2C2E] dark:text-[#F5E6D3]">
+            {isDark ? '深色模式' : '浅色模式'}
+          </p>
+          <p className="text-xs text-[#9B8A8E]">点击切换主题</p>
+        </div>
+        <div className={`w-12 h-6 rounded-full transition-colors flex items-center ${isDark ? 'bg-[#E8A0BF] justify-end' : 'bg-[#E8D5DE] justify-start'}`}>
+          <div className="w-5 h-5 bg-white rounded-full mx-0.5 shadow-sm transition-all" />
+        </div>
+      </button>
+
+      {/* Data Export / Import */}
+      <div className="p-4 bg-white/70 dark:bg-[#2A1F1E]/70 rounded-2xl border border-[#E8D5DE]/40 dark:border-[#4A3540]/40">
+        <div className="flex items-center gap-2 mb-3">
+          <Download className="w-5 h-5 text-[#E8A0BF]" />
+          <h3 className="text-sm font-semibold text-[#3D2C2E] dark:text-[#F5E6D3]">数据管理</h3>
+        </div>
+        <p className="text-xs text-[#9B8A8E] dark:text-[#A89890] mb-3">
+          导出备份为加密文件，可导入恢复。数据已加密，只有用正确密码才能读取。
+        </p>
+        <div className="flex gap-2">
+          <Button
+            onClick={handleExport}
+            className="flex-1 bg-gradient-to-r from-[#E8A0BF] to-[#F2C57C] text-white rounded-xl h-9 text-sm"
+          >
+            <Download className="w-4 h-4 mr-1" />导出备份
+          </Button>
+          <Button
+            onClick={() => fileInputRef.current?.click()}
+            variant="outline"
+            className="flex-1 rounded-xl h-9 text-sm border-[#E8D5DE]/40 dark:border-[#4A3540]/40"
+          >
+            <Upload className="w-4 h-4 mr-1" />导入恢复
+          </Button>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          className="hidden"
+          onChange={handleImport}
+        />
       </div>
 
       {/* Decoy Mode */}
@@ -188,32 +365,13 @@ export default function Settings({ onLock }: SettingsProps) {
           设置一个伪装密码。别人输入伪装密码时，只会看到空的日记本，保护你的真实内容。
         </p>
         {!settingDecoy ? (
-          <Button
-            onClick={() => setSettingDecoy(true)}
-            className="bg-gradient-to-r from-[#E8A0BF] to-[#F2C57C] text-white rounded-xl h-9 text-sm"
-          >
+          <Button onClick={() => setSettingDecoy(true)} className="bg-gradient-to-r from-[#E8A0BF] to-[#F2C57C] text-white rounded-xl h-9 text-sm">
             {hasDecoy ? '修改伪装密码' : '设置伪装密码'}
           </Button>
         ) : (
           <div className="space-y-2">
-            <Input
-              type="password"
-              inputMode="numeric"
-              maxLength={4}
-              placeholder="输入4位伪装密码"
-              value={decoyPin}
-              onChange={(e) => setDecoyPin(e.target.value.replace(/\D/g, ''))}
-              className="bg-white/60 dark:bg-[#1A1614]/60 border-[#E8D5DE]/40 dark:border-[#4A3540]/40 rounded-xl"
-            />
-            <Input
-              type="password"
-              inputMode="numeric"
-              maxLength={4}
-              placeholder="确认伪装密码"
-              value={confirmDecoyPin}
-              onChange={(e) => setConfirmDecoyPin(e.target.value.replace(/\D/g, ''))}
-              className="bg-white/60 dark:bg-[#1A1614]/60 border-[#E8D5DE]/40 dark:border-[#4A3540]/40 rounded-xl"
-            />
+            <Input type="password" inputMode="numeric" maxLength={4} placeholder="输入4位伪装密码" value={decoyPin} onChange={(e) => setDecoyPin(e.target.value.replace(/\D/g, ''))} className="bg-white/60 dark:bg-[#1A1614]/60 border-[#E8D5DE]/40 dark:border-[#4A3540]/40 rounded-xl" />
+            <Input type="password" inputMode="numeric" maxLength={4} placeholder="确认伪装密码" value={confirmDecoyPin} onChange={(e) => setConfirmDecoyPin(e.target.value.replace(/\D/g, ''))} className="bg-white/60 dark:bg-[#1A1614]/60 border-[#E8D5DE]/40 dark:border-[#4A3540]/40 rounded-xl" />
             <div className="flex gap-2">
               <Button onClick={() => { setSettingDecoy(false); setError('') }} variant="ghost" className="flex-1 rounded-xl">取消</Button>
               <Button onClick={handleSetDecoy} className="flex-1 bg-gradient-to-r from-[#E8A0BF] to-[#F2C57C] text-white rounded-xl">确认</Button>
@@ -236,16 +394,10 @@ export default function Settings({ onLock }: SettingsProps) {
               const date = new Date(photo.createdAt)
               return (
                 <div key={photo.id} className="relative rounded-xl overflow-hidden group">
-                  <img
-                    src={photo.photoData}
-                    alt="入侵者"
-                    className="w-full aspect-square object-cover"
-                  />
+                  <img src={photo.photoData} alt="入侵者" className="w-full aspect-square object-cover" />
                   <div className="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm p-1">
                     <p className="text-[8px] text-white text-center">
-                      {date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
-                      {' '}
-                      {date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                      {date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })} {date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                     </p>
                   </div>
                 </div>
@@ -347,7 +499,8 @@ export default function Settings({ onLock }: SettingsProps) {
           <li>• 伪装模式：假密码看到空日记</li>
           <li>• 入侵拍照：输错3次自动拍下偷窥者</li>
           <li>• 自动锁定：30秒无操作自动锁屏</li>
-          <li>• 登录日志：记录每次访问IP和时间</li>
+          <li>• 数据备份：加密导出，安全无忧</li>
+          <li>• 标签分类：轻松管理你的日记</li>
         </ul>
       </div>
 
@@ -358,7 +511,7 @@ export default function Settings({ onLock }: SettingsProps) {
           <h3 className="text-sm font-semibold text-[#3D2C2E] dark:text-[#F5E6D3]">关于心语日记</h3>
         </div>
         <p className="text-xs text-[#9B8A8E] dark:text-[#A89890]">
-          心语日记 v1.0 — 你的私密空间，只属于你的日记。记录每一天的心情，守护每一份感受。
+          心语日记 v2.0 — 你的私密空间，只属于你的日记。记录每一天的心情，守护每一份感受。
         </p>
       </div>
     </div>

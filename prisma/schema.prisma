@@ -9,9 +9,10 @@ datasource db {
 
 model DiaryEntry {
   id               String   @id @default(cuid())
-  encryptedContent String   // AES-GCM encrypted JSON: {text, mood, weather, temperature, recordedAt}
+  encryptedContent String   // AES-GCM encrypted JSON: {text, mood, weather, temperature, recordedAt, tags}
   encryptedImage   String?  // AES-GCM encrypted base64 image data
   entryDate        String   // YYYY-MM-DD format for calendar lookup (not encrypted)
+  isPinned         Boolean  @default(false) // Pinned/favorited entry
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
