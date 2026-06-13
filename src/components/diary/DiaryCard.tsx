@@ -30,9 +30,10 @@ interface DiaryCardProps {
     temperature: string
   }) => void
   onPin: (id: string, pinned: boolean) => void
+  onImageClick?: (imageUrl: string) => void
 }
 
-export default function DiaryCard({ entry, onDelete, onEdit, onPin }: DiaryCardProps) {
+export default function DiaryCard({ entry, onDelete, onEdit, onPin, onImageClick }: DiaryCardProps) {
   const mood = MOODS.find((m) => m.value === entry.mood)
   const weather = WEATHERS.find((w) => w.value === entry.weather)
 
@@ -51,7 +52,7 @@ export default function DiaryCard({ entry, onDelete, onEdit, onPin }: DiaryCardP
   })
 
   return (
-    <div className={`bg-white/70 dark:bg-[#2A1F1E]/70 backdrop-blur-sm rounded-2xl border p-4 shadow-sm ${
+    <div className={`bg-white/70 dark:bg-[#2A1F1E]/70 backdrop-blur-sm rounded-2xl border p-4 shadow-sm transition-all duration-200 hover:shadow-md ${
       entry.isPinned
         ? 'border-[#F2C57C]/60 dark:border-[#F2C57C]/30 bg-gradient-to-br from-white/80 to-[#FFF8F0]/60 dark:from-[#2A1F1E]/80 dark:to-[#3A3020]/40'
         : 'border-[#E8D5DE]/40 dark:border-[#4A3540]/40'
@@ -123,11 +124,11 @@ export default function DiaryCard({ entry, onDelete, onEdit, onPin }: DiaryCardP
 
       {/* Image */}
       {entry.hasImage && entry.imageUrl && (
-        <div className="mb-3 rounded-xl overflow-hidden">
+        <div className="mb-3 rounded-xl overflow-hidden cursor-pointer" onClick={() => onImageClick?.(entry.imageUrl)}>
           <img
             src={entry.imageUrl}
             alt="日记图片"
-            className="w-full max-h-80 object-cover rounded-xl"
+            className="w-full max-h-80 object-cover rounded-xl hover:opacity-90 transition-opacity"
           />
         </div>
       )}
