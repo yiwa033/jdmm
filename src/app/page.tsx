@@ -29,6 +29,7 @@ export default function Home() {
     temperature: string
   } | null>(null)
   const [lastDiaryMood, setLastDiaryMood] = useState<string>('')
+  const [lastDiaryContext, setLastDiaryContext] = useState<string>('')
   const lastActivityRef = useRef<number>(Date.now())
 
   // Load auto-lock setting from localStorage
@@ -84,11 +85,16 @@ export default function Home() {
     lastActivityRef.current = Date.now()
   }, [])
 
-  const handleEntrySubmitted = useCallback((mood?: string) => {
+  const handleEntrySubmitted = useCallback((mood?: string, diaryText?: string) => {
     setRefreshTrigger((prev) => prev + 1)
     setActiveTab('feed')
     setEditingEntry(null)
     if (mood) setLastDiaryMood(mood)
+    if (diaryText) {
+      // Provide a brief context snippet (first 80 chars) for the AI companion
+      const snippet = diaryText.length > 80 ? diaryText.slice(0, 80) + '…' : diaryText
+      setLastDiaryContext(snippet)
+    }
   }, [])
 
   const handleDeleteEntry = useCallback((_id: string) => {
@@ -188,7 +194,7 @@ export default function Home() {
           <PetCompanion />
         )}
         {activeTab === 'chat' && (
-          <AICompanion currentMood={lastDiaryMood} />
+          <AICompanion currentMood={lastDiaryMood} diaryContext={lastDiaryContext} />
         )}
         {activeTab === 'settings' && (
           <Settings onLock={handleLock} cryptoKey={cryptoKey} autoLockMs={autoLockMs} onAutoLockChange={handleAutoLockChange} />

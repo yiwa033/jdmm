@@ -5,6 +5,7 @@ import { Heart, Utensils, Sparkles, Palette, Baby, Cat, Dog, Rabbit, Squirrel } 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import PetAchievements from './PetAchievements'
+import { getPixelPet, getPetMood } from './PixelPet'
 
 interface PetData {
   id: string
@@ -20,18 +21,11 @@ interface PetData {
 }
 
 const PET_TYPES = [
-  { value: 'cat', emoji: '🐱', label: '小猫', icon: Cat },
-  { value: 'dog', emoji: '🐶', label: '小狗', icon: Dog },
-  { value: 'rabbit', emoji: '🐰', label: '兔子', icon: Rabbit },
-  { value: 'hamster', emoji: '🐹', label: '仓鼠', icon: Squirrel },
+  { value: 'cat', label: '小猫', icon: Cat, color: '#F5A623' },
+  { value: 'dog', label: '小狗', icon: Dog, color: '#D4A574' },
+  { value: 'rabbit', label: '兔子', icon: Rabbit, color: '#F0E0E8' },
+  { value: 'hamster', label: '仓鼠', icon: Squirrel, color: '#F5D6A0' },
 ]
-
-const PET_FACES: Record<string, Record<string, string>> = {
-  cat: { happy: '😺', normal: '🐱', sad: '😿', sleeping: '😴', eating: '😸' },
-  dog: { happy: '😆', normal: '🐶', sad: '🐕', sleeping: '💤', eating: '🐶' },
-  rabbit: { happy: '🐰', normal: '🐰', sad: '🐰', sleeping: '💤', eating: '🐰' },
-  hamster: { happy: '🐹', normal: '🐹', sad: '🐹', sleeping: '💤', eating: '🐹' },
-}
 
 const PET_MESSAGES: Record<string, string[]> = {
   happy: [
@@ -69,15 +63,6 @@ function getRandomMsg(category: string): string {
   return msgs[Math.floor(Math.random() * msgs.length)]
 }
 
-function getPetFace(petType: string, happiness: number, fullness: number, energy: number): string {
-  const faces = PET_FACES[petType] || PET_FACES.cat
-  if (fullness < 20) return faces.sad
-  if (energy < 20) return faces.sleeping
-  if (happiness >= 70) return faces.happy
-  if (happiness >= 40) return faces.normal
-  return faces.sad
-}
-
 function getMoodCategory(happiness: number, fullness: number, energy: number): string {
   if (fullness < 30) return 'hungry'
   if (energy < 30) return 'tired'
@@ -99,6 +84,11 @@ function getBarColor(value: number, type: 'happy' | 'food' | 'energy'): string {
 function expToNextLevel(level: number): number {
   return level * 100
 }
+
+// Pixel art decorative elements
+const PIXEL_HEART = `<svg viewBox="0 0 8 8" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges"><rect x="1" y="1" width="2" height="2" fill="#E8A0BF"/><rect x="5" y="1" width="2" height="2" fill="#E8A0BF"/><rect x="0" y="2" width="8" height="2" fill="#E8A0BF"/><rect x="1" y="4" width="6" height="2" fill="#E8A0BF"/><rect x="2" y="6" width="4" height="1" fill="#E8A0BF"/><rect x="3" y="7" width="2" height="1" fill="#E8A0BF"/></svg>`
+
+const PIXEL_STAR = `<svg viewBox="0 0 8 8" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges"><rect x="3" y="0" width="2" height="2" fill="#FFD54F"/><rect x="0" y="3" width="2" height="2" fill="#FFD54F"/><rect x="3" y="3" width="2" height="2" fill="#FFD54F"/><rect x="6" y="3" width="2" height="2" fill="#FFD54F"/><rect x="3" y="6" width="2" height="2" fill="#FFD54F"/></svg>`
 
 export default function PetCompanion() {
   const [pet, setPet] = useState<PetData | null>(null)
@@ -215,8 +205,9 @@ export default function PetCompanion() {
 
   if (!pet) return null
 
-  const petType = PET_TYPES.find((t) => t.value === pet.petType) || PET_TYPES[0]
-  const face = getPetFace(pet.petType, pet.happiness, pet.fullness, pet.energy)
+  const petTypeInfo = PET_TYPES.find((t) => t.value === pet.petType) || PET_TYPES[0]
+  const petMood = getPetMood(pet.happiness, pet.fullness, pet.energy)
+  const pixelPetSvg = getPixelPet(pet.petType, petMood)
   const expProgress = pet.exp % 100
   const expNeeded = expToNextLevel(pet.level)
   const daysTogether = Math.max(1, Math.ceil((Date.now() - new Date(pet.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
@@ -225,13 +216,19 @@ export default function PetCompanion() {
     <div className="flex-1 overflow-y-auto pb-24 px-4 pt-4 space-y-4">
       {/* Pet Display Area */}
       <div className="bg-gradient-to-b from-[#FFF0F5] to-[#FFF8F0] dark:from-[#3A2028] dark:to-[#2A1F1E] rounded-3xl p-6 border border-[#E8D5DE]/40 dark:border-[#4A3540]/40 relative overflow-hidden">
-        {/* Floating particles */}
+        {/* Floating pixel particles */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           {actionAnimation === 'pet' && (
             <>
-              <span className="absolute animate-float-up text-xl" style={{ left: '20%', top: '30%' }}>💕</span>
-              <span className="absolute animate-float-up text-lg" style={{ left: '60%', top: '20%', animationDelay: '0.2s' }}>💗</span>
-              <span className="absolute animate-float-up text-xl" style={{ left: '40%', top: '40%', animationDelay: '0.4s' }}>💖</span>
+              <span className="absolute animate-float-up w-6 h-6" style={{ left: '20%', top: '30%', imageRendering: 'pixelated' }}
+                dangerouslySetInnerHTML={{ __html: PIXEL_HEART }}
+              />
+              <span className="absolute animate-float-up w-5 h-5" style={{ left: '60%', top: '20%', animationDelay: '0.2s', imageRendering: 'pixelated' }}
+                dangerouslySetInnerHTML={{ __html: PIXEL_HEART }}
+              />
+              <span className="absolute animate-float-up w-6 h-6" style={{ left: '40%', top: '40%', animationDelay: '0.4s', imageRendering: 'pixelated' }}
+                dangerouslySetInnerHTML={{ __html: PIXEL_HEART }}
+              />
             </>
           )}
           {actionAnimation === 'feed' && (
@@ -243,9 +240,13 @@ export default function PetCompanion() {
           )}
           {actionAnimation === 'play' && (
             <>
-              <span className="absolute animate-float-up text-xl" style={{ left: '20%', top: '30%' }}>⭐</span>
+              <span className="absolute animate-float-up w-6 h-6" style={{ left: '20%', top: '30%', imageRendering: 'pixelated' }}
+                dangerouslySetInnerHTML={{ __html: PIXEL_STAR }}
+              />
               <span className="absolute animate-float-up text-lg" style={{ left: '50%', top: '20%', animationDelay: '0.2s' }}>✨</span>
-              <span className="absolute animate-float-up text-xl" style={{ left: '75%', top: '35%', animationDelay: '0.4s' }}>🌟</span>
+              <span className="absolute animate-float-up w-5 h-5" style={{ left: '75%', top: '35%', animationDelay: '0.4s', imageRendering: 'pixelated' }}
+                dangerouslySetInnerHTML={{ __html: PIXEL_STAR }}
+              />
             </>
           )}
           {actionAnimation === 'levelup' && (
@@ -253,26 +254,32 @@ export default function PetCompanion() {
               <span className="absolute animate-float-up text-2xl" style={{ left: '15%', top: '25%' }}>🎉</span>
               <span className="absolute animate-float-up text-2xl" style={{ left: '45%', top: '15%' }}>🎊</span>
               <span className="absolute animate-float-up text-2xl" style={{ left: '75%', top: '30%' }}>⬆️</span>
-              <span className="absolute animate-float-up text-xl" style={{ left: '30%', top: '40%', animationDelay: '0.3s' }}>✨</span>
-              <span className="absolute animate-float-up text-xl" style={{ left: '60%', top: '35%', animationDelay: '0.5s' }}>💫</span>
+              <span className="absolute animate-float-up w-5 h-5" style={{ left: '30%', top: '40%', animationDelay: '0.3s', imageRendering: 'pixelated' }}
+                dangerouslySetInnerHTML={{ __html: PIXEL_STAR }}
+              />
+              <span className="absolute animate-float-up w-6 h-6" style={{ left: '60%', top: '35%', animationDelay: '0.5s', imageRendering: 'pixelated' }}
+                dangerouslySetInnerHTML={{ __html: PIXEL_STAR }}
+              />
             </>
           )}
         </div>
 
-        {/* Pet character */}
+        {/* Pet character - Pixel Art! */}
         <div className="flex flex-col items-center">
           <div
-            className={`text-8xl transition-all duration-300 select-none ${
+            className={`w-32 h-32 transition-all duration-300 select-none ${
               bounce ? 'animate-bounce' : ''
             } ${
               actionAnimation === 'feed' ? 'animate-wiggle' : ''
+            } ${
+              !bounce && !actionAnimation ? 'animate-pet-idle' : ''
             }`}
             style={{
+              imageRendering: 'pixelated',
               filter: pet.happiness < 30 ? 'grayscale(30%)' : 'none',
             }}
-          >
-            {face}
-          </div>
+            dangerouslySetInnerHTML={{ __html: pixelPetSvg }}
+          />
 
           {/* Name & Level */}
           <div className="mt-3 flex items-center gap-2">
@@ -404,12 +411,13 @@ export default function PetCompanion() {
       {/* Achievements */}
       <PetAchievements pet={pet} />
 
-      {/* Pet Type Selector */}
+      {/* Pet Type Selector - with pixel previews */}
       <div className="bg-white/70 dark:bg-[#2A1F1E]/70 rounded-2xl p-4 border border-[#E8D5DE]/40 dark:border-[#4A3540]/40">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Palette className="w-4 h-4 text-[#E8A0BF]" />
             <h3 className="text-sm font-semibold text-[#3D2C2E] dark:text-[#F5E6D3]">宠物外观</h3>
+            <span className="text-[10px] px-1.5 py-0.5 bg-[#FFF0F5] dark:bg-[#3A2028] rounded-full text-[#E8A0BF]">像素风</span>
           </div>
           <Button
             onClick={() => setShowTypeSelector(!showTypeSelector)}
@@ -431,7 +439,9 @@ export default function PetCompanion() {
                     : 'bg-white/50 dark:bg-[#1A1614]/50 border border-[#E8D5DE]/30 dark:border-[#4A3540]/30'
                 }`}
               >
-                <span className="text-3xl">{type.emoji}</span>
+                <div className="w-10 h-10" style={{ imageRendering: 'pixelated' }}
+                  dangerouslySetInnerHTML={{ __html: getPixelPet(type.value, 'happy') }}
+                />
                 <span className="text-xs text-[#9B8A8E]">{type.label}</span>
               </button>
             ))}
@@ -492,6 +502,7 @@ export default function PetCompanion() {
           <li>• 精力不足时玩耍会失败，让宠物休息一会吧</li>
           <li>• 点击宠物名字可以给它改名字哦</li>
           <li>• 完成特定目标可解锁成就徽章 🏆</li>
+          <li>• 心情不好？去心灵伙伴那里聊聊吧 💕</li>
         </ul>
       </div>
     </div>

@@ -32,7 +32,7 @@ const PRESET_TAGS = ['生活', '工作', '学习', '旅行', '美食', '运动',
 
 interface NewEntryProps {
   cryptoKey: CryptoKey
-  onSubmitted: () => void
+  onSubmitted: (mood?: string, text?: string) => void
   onCancel: () => void
   editingEntry?: {
     id: string
@@ -186,7 +186,7 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'diary' }),
           }).catch(() => {})
-          onSubmitted()
+          onSubmitted(mood || undefined, text || undefined)
         }
       } else {
         const entryDate = new Date().toISOString().slice(0, 10)
@@ -205,7 +205,7 @@ export default function NewEntry({ cryptoKey, onSubmitted, onCancel, editingEntr
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'diary' }),
           }).catch(() => {})
-          onSubmitted()
+          onSubmitted(mood || undefined, text || undefined)
         }
       }
     } catch (e) {
